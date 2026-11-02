@@ -3353,11 +3353,13 @@ async function serverLines(sport) {
   return snaps;
 }
 function renderServerPanel() {
+  // server key working → hide the key boxes (they come back by themselves if the server key ever stops working)
+  for (const id of ['olKey', 'fsKey']) { const box = $(id)?.parentElement; if (box) box.style.display = SERVER.proxy ? 'none' : ''; }
   const el = $('olServer'), note = $('olKeyNote'); if (!el) return;
   if (note) note.innerHTML = SERVER.proxy ? '<span class="green">Not needed: your key is saved on the server (Netlify), so every device works without pasting it.</span>' : "Free key at the-odds-api.com. It's stored only in this browser.";
   if (!SERVER.on) { el.innerHTML = '<div class="note">Background job: off. It turns on when the site is deployed from GitHub (see README). Until then everything works as before.</div>'; return; }
   const st = SERVER.status || {}, ago = st.lastRun ? Math.round((Date.now() - st.lastRun) / 60e3) : null;
-  const head = `<div class="inset xs"><b>Background job</b> · ${!SERVER.proxy ? '<span class="amber">add ODDS_API_KEY in Netlify → Site configuration → Environment variables</span>'
+  const head = `<div class="inset xs"><b>Background job</b>${SERVER.proxy ? ' · <span class="green">odds key on server ✓</span>' : ''} · ${!SERVER.proxy ? '<span class="amber">add ODDS_API_KEY in Netlify → Site configuration → Environment variables</span>'
     : ago === null ? 'waiting for its first run (every 30 min)' : `last run ${ago < 1 ? 'just now' : ago + ' min ago'}`}${st.creditsLeft != null ? ` · ${st.creditsLeft} credits left` : ''}${st.alertHours ? ` · alert scans at ${st.alertHours} ET${st.ntfy ? ' + phone push' : ''}` : ' · alert scans off (set ALERT_HOURS)'}</div>`;
   const a = SERVER.alerts, list = (a?.list || []).filter(x => new Date(x.start).getTime() > Date.now());
   const rows = list.slice(0, 25).map(x => `<tr><td>${x.sport}</td><td>${esc(x.game)}<div class="xs muted">${hhmm(x.start)}</div></td><td><b>${esc(x.player)}</b></td><td>${x.side === 'over' ? 'Over' : 'Under'} ${x.line} ${esc(x.market.replace(/^player_/, '').replace(/_/g, ' '))}</td><td class="mono">${fmtOdds(x.price)} ${esc(x.book)}</td><td class="mono green">+${(x.ev * 100).toFixed(1)}%</td><td class="mono">${fmtOdds(toAmerican(x.fair))}</td></tr>`).join('');
