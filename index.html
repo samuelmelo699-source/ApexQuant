@@ -361,6 +361,8 @@
           <div><label class="muted" for="olMax">Max odds</label><input id="olMax" type="number" step="10" class="mono"></div>
           <div><label class="muted" for="olMinEV">Min EV %</label><input id="olMinEV" type="number" step="1" class="mono"></div>
           <div><label class="muted" for="olMinBooks">Min books</label><input id="olMinBooks" type="number" step="1" min="2" class="mono"></div>
+          <div style="grid-column:1/-1"><label class="muted" for="olMinHit">Min hit rate, last 10 games: <b id="olMinHitVal" class="mono"></b></label><input id="olMinHit" type="range" min="0" max="100" step="10" style="width:100%">
+            <div class="note">How often the bet would have won in his last 10 games at this line. Off at 0%. Above 0%, props without a game log (NHL, players not on the slate yet) are hidden.</div></div>
         </div>
         <div class="g2s">
           <div><label class="muted" for="olBooks">Books</label><select id="olBooks" style="width:100%">
@@ -3264,7 +3266,7 @@ const OL_MARKETS = {
   NBA: { main: ['player_points', 'player_rebounds', 'player_assists', 'player_threes', 'player_points_rebounds_assists', 'player_blocks', 'player_steals', 'player_double_double'],
          alt: ['player_points_alternate', 'player_rebounds_alternate', 'player_assists_alternate', 'player_threes_alternate', 'player_points_rebounds_assists_alternate'] }
 };
-const OL_DEFAULTS = { key: '', sports: ['NFL', 'NBA'], alt: true, books: 'sharp', min: -150, max: 1000, minEV: 5, minBooks: 3, ttl: 15, maxAge: 30, hideStale: true, q: '' };
+const OL_DEFAULTS = { key: '', sports: ['NFL', 'NBA'], alt: true, minHit: 0, books: 'sharp', min: -150, max: 1000, minEV: 5, minBooks: 3, ttl: 15, maxAge: 30, hideStale: true, q: '' };
 STORE.ol = { ...OL_DEFAULTS, ...(STORE.ol || {}) };
 if (!OL_SPORTS[STORE.ol.tab]) STORE.ol.tab = 'NBA';
 if (STORE.ol.regions && !STORE.ol.books) STORE.ol.books = STORE.ol.regions;
@@ -3498,7 +3500,7 @@ function computeOutliers() {
           player: g.player, market: g.base, mLabel: g.meta.label, side: g.meta.dist === 'binary' ? 'Yes' : (/^over$/i.test(top.side) ? 'O' : 'U'),
           sideRaw: top.side, line: top.line, price: top.price, book: top.title, bookKey: top.book, alt: top.alt,
           pWin: fair.pWin, pLose: fair.pLose, fairOdds: toAmerican(fair.pWin / Math.max(1e-9, fair.pWin + fair.pLose)), ev: evv, nBooks: books.size,
-          prices: qs.map(q => ({ book: q.title, price: q.price })), method: fair.method, modelP,
+          prices: qs.map(q => ({ book: q.title, price: q.price })), method: fair.method, modelP, pid: model?.playerId || null, mm: g.meta.model || null,
           ageMin, lagMin, stale: (lagMin !== null && lagMin > 10) || (ageMin !== null && ageMin > STORE.ol.maxAge),
           stake: kellyStake(fair.pWin, fair.pLose, top.price) });
       }
@@ -3564,18 +3566,29 @@ function renderOutliersControls() {
   document.querySelectorAll('#olTabs [data-oltab]').forEach(b => b.classList.toggle('on', b.dataset.oltab === o.tab));
   for (const sp of Object.keys(OL_SPORTS)) {
     const el = document.querySelector(`[data-olcount="${sp}"]`); if (!el) continue;
-    const n = OL.rows.filter(r => r.sport === sp && r.price >= o.min && r.price <= o.max && r.ev * 100 >= o.minEV && r.nBooks >= o.minBooks && !(o.hideStale && r.stale)).length;
+    const n = OL.rows.filter(r => r.sport === sp && r.price >= o.min && r.price <= o.max && r.ev * 100 >= o.minEV && r.nBooks >= o.minBooks && !(o.hideStale && r.stale) && olHitOK(r)).length;
     el.textContent = OL.scanAt[sp] ? `· ${n} · ${new Date(OL.scanAt[sp]).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
   }
   $('olScanBtn').textContent = `Scan ${o.tab}`;
   $('olAlt').checked = o.alt; $('olBooks').value = o.books; $('olHideStale').checked = o.hideStale; $('olGameLines').checked = o.gameLines !== false;
   for (const [id, k] of [['olMin', 'min'], ['olMax', 'max'], ['olMinEV', 'minEV'], ['olMinBooks', 'minBooks'], ['olTtl', 'ttl'], ['olMaxAge', 'maxAge']]) $(id).value = o[k];
+  $('olMinHit').value = o.minHit || 0; $('olMinHitVal').textContent = o.minHit ? `${o.minHit}%+` : 'off';
   $('olSearch').value = o.q;
   const per = Math.round(olMarketsFor(o.tab).length * regionCount());
   const games = OL.nEvents[o.tab] || 0;
   $('olCost').textContent = `≈ ${per} credits per game${games ? ` · ${games} games ≈ ${per * games} credits` : ''} (games cached under ${o.ttl} min are free)${OL.credits !== null ? ` · ${OL.credits} credits left` : ''}`;
 }
 const tracked = id => STORE.bets.some(b => b.src === id);
+// last-10 hit rate of this exact bet (side + line) from the player's ESPN game log
+function olHit(r) {
+  if (!r.pid || !r.mm) return null;
+  const all = logAll(r.sport, r.pid, r.mm); if (!all?.length) return null;
+  const xs = all.slice(0, 10).map(g => g.v);
+  const win = v => r.side === 'Yes' ? v > 0 : r.side === 'O' ? v > r.line : v < r.line;
+  const graded = xs.filter(v => r.side === 'Yes' || v !== r.line);      // whole-number lines: pushes don't count
+  return graded.length ? { hits: graded.filter(win).length, n: graded.length, rate: graded.filter(win).length / graded.length } : null;
+}
+const olHitOK = r => !STORE.ol.minHit || ((h => h !== null && h.rate * 100 >= STORE.ol.minHit - 1e-9)(olHit(r)));
 function renderOutliers() {
   renderOutliersControls();
   const o = STORE.ol, q = normName(o.q);
@@ -3583,14 +3596,14 @@ function renderOutliers() {
   const markets = [...new Map(OL.rows.filter(r => r.sport === o.tab).map(r => [r.market, r.mLabel])).entries()];
   mk.innerHTML = `<option value="">All markets</option>${markets.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}`;
   mk.value = markets.some(([k]) => k === prevM) ? prevM : '';
-  const base = OL.rows.filter(r => r.sport === o.tab && r.price >= o.min && r.price <= o.max && r.ev * 100 >= o.minEV && r.nBooks >= o.minBooks &&
+  const base = OL.rows.filter(r => r.sport === o.tab && r.price >= o.min && r.price <= o.max && r.ev * 100 >= o.minEV && r.nBooks >= o.minBooks && olHitOK(r) &&
       (!mk.value || r.market === mk.value) && (!q || normName(r.player).includes(q) || normName(r.label).includes(q)));
   const hiddenStale = o.hideStale ? base.filter(r => r.stale).length : 0;
   const rows = base.filter(r => !(o.hideStale && r.stale)).sort((a, b) => b.ev - a.ev).slice(0, 250);
   const errs = OL.errors.length ? `<div class="banner bad">${OL.errors.map(esc).join('<br>')}</div>` : '';
   const nG = [...OL.data.values()].filter(v => v.sport === o.tab).length;
   $('olStatus').innerHTML = nG
-    ? `${o.tab}: ${nG} games · ${OL.rows.filter(r => r.sport === o.tab).length} prices checked · <b class="green">${rows.length} outliers</b>${hiddenStale ? ` · ${hiddenStale} stale hidden` : ''}`
+    ? `${o.tab}: ${nG} games · ${OL.rows.filter(r => r.sport === o.tab).length} prices checked · <b class="green">${rows.length} outliers</b>${hiddenStale ? ` · ${hiddenStale} stale hidden` : ''}${o.minHit && o.tab !== APP.sport && !OL.rows.some(r => r.sport === o.tab && olHit(r)) ? `<div class="amber">Hit rates need ${o.tab} game logs: pick ${o.tab} at the top of the page once, then come back.</div>` : ''}`
     : (hasOdds() ? `Press Scan ${o.tab} to load ${o.tab} props. Other tabs aren't touched.` : '<span class="amber">Add your Odds API key to start.</span>');
   if (!rows.length) { $('olBody').innerHTML = errs + (nG ? '<div class="inset xs muted">No outliers match. Try a lower minimum EV or a wider odds range.</div>' : ''); return; }
   $('olBody').innerHTML = errs + `<div class="ol-grid">${rows.map(r => {
@@ -3604,6 +3617,7 @@ function renderOutliers() {
         <div><div class="b">${esc(r.player)}</div><div class="xs muted">${r.side === 'Yes' ? '' : r.side + ' ' + r.line + ' '}${esc(r.mLabel)}${r.alt ? ' · alt' : ''}</div></div>
         <div class="xl xb mono green">${fmtOdds(r.price)}</div>
       </div>
+      ${(h => h ? `<div class="xs" style="margin-top:.4rem">🎯 Hit <b class="mono ${h.rate >= 0.6 ? 'green' : h.rate <= 0.4 ? 'rose' : ''}">${h.hits}/${h.n} (${Math.round(h.rate * 100)}%)</b> <span class="muted">last ${h.n} games at this line</span></div>` : '')(olHit(r))}
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(r.fairOdds)} (${pct(r.pWin)}) · ${r.nBooks} books${age}</div>
       <div class="row between xs" style="margin-top:.4rem">
         <span>${r.modelP !== null ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
@@ -3775,6 +3789,7 @@ function bindOutliers() {
   for (const [id, k] of [['olMin', 'min'], ['olMax', 'max'], ['olMinEV', 'minEV'], ['olMinBooks', 'minBooks'], ['olTtl', 'ttl'], ['olMaxAge', 'maxAge']])
     $(id).addEventListener('change', e => { const v = num(e.target.value); if (v !== null) o()[k] = v; if (k === 'minBooks' || k === 'maxAge') computeOutliers(); saveRender(); });
   $('olSearch').addEventListener('input', e => { o().q = e.target.value; save(); renderOutliers(); });
+  $('olMinHit').addEventListener('input', e => { o().minHit = +e.target.value; save(); renderOutliers(); });
   $('olMarket').addEventListener('change', renderOutliers);
   $('olScanBtn').addEventListener('click', () => scanOutliers(false));
   $('olRefreshBtn').addEventListener('click', () => scanOutliers(true));
