@@ -380,6 +380,28 @@
       <div id="olServer"></div>
       <div id="olBody"></div>
     </div>
+    <div class="card stack" id="gloSection">
+      <div class="row between">
+        <div>
+          <h2 class="sm xb">💵 Moneyline &amp; spread outliers</h2>
+          <p class="note" style="margin:0">Game lines from 10 books, each price checked against the other books' no-vig consensus. This section is separate from the props above and has its own Load button. It uses the Min/Max odds, Min books and Hide stale settings from the props section.</p>
+        </div>
+        <div class="row"><button type="button" id="gloScanBtn" class="btn-go">Load</button><button type="button" id="gloRefreshBtn" title="Ignore cache and re-download (about 3 credits)">↻ Force refresh</button></div>
+      </div>
+      <nav class="row" id="gloTabs">
+        <button type="button" data-glotab="NFL">🏈 NFL</button>
+        <button type="button" data-glotab="CFB">🏟️ CFB</button>
+        <button type="button" data-glotab="NBA">🏀 NBA</button>
+        <button type="button" data-glotab="NHL">🏒 NHL</button>
+      </nav>
+      <div class="row xs" style="gap:1rem;flex-wrap:wrap;align-items:flex-end">
+        <label class="row"><input type="checkbox" id="gloML"> Moneyline</label>
+        <label class="row"><input type="checkbox" id="gloSP"> <span id="gloSpLabel">Spread</span></label>
+        <div><label class="muted" for="gloMinEV">Min EV %</label><input id="gloMinEV" type="number" step="0.5" class="mono" style="width:6rem"></div>
+      </div>
+      <div class="xs" id="gloStatus"></div>
+      <div id="gloBody"></div>
+    </div>
   </section>
 
   <!-- ===================== DAILY RECAP ===================== -->
@@ -3591,6 +3613,7 @@ function olHit(r) {
 const olHitOK = r => !STORE.ol.minHit || ((h => h !== null && h.rate * 100 >= STORE.ol.minHit - 1e-9)(olHit(r)));
 function renderOutliers() {
   renderOutliersControls();
+  renderGLO();
   const o = STORE.ol, q = normName(o.q);
   const mk = $('olMarket'), prevM = mk.value;
   const markets = [...new Map(OL.rows.filter(r => r.sport === o.tab).map(r => [r.market, r.mLabel])).entries()];
@@ -3947,6 +3970,143 @@ async function applyBookGameLines(sport, force = false) {
   GL.msg[sport] = `${n} ${sport} games priced from ${SHARP_SET.split(',').length} books${c.server ? ` (background snapshot ${hhmm(c.t)}, no credits used)` : ''}`;
   if (sport === APP.sport) for (const k of [...APP.simCache.keys()]) if (k.startsWith(`${sport}:`)) APP.simCache.delete(k);
   return n;
+}
+
+/* =====================================================================
+   MONEYLINE & SPREAD OUTLIERS (own section on the Prop outliers page)
+   Same idea as the props: each book's price vs the no-vig consensus of the OTHER books
+   (sharp-weighted median, Pinnacle counts more). Spreads only compare books at the same number.
+   Data = the 10-book game-line download (3 credits per sport; free when the background
+   job's snapshot is fresh or the app already downloaded it in the last 30 min).
+   ===================================================================== */
+STORE.glo = { tab: 'NBA', ml: true, sp: true, minEV: 2, ...(STORE.glo || {}) };
+const GLO = { rows: [], busy: false, msg: {}, err: '' };
+async function glFetch(sport, force = false) {
+  let c = GL.data[sport];
+  if (!c) { try { c = JSON.parse(localStorage.getItem(GL_CACHE_KEY) || '{}')[sport] || null; if (c) GL.data[sport] = c; } catch {} }
+  const sv = await serverLines(sport);
+  if (sv?.length) { const last = sv[sv.length - 1]; if (!c || last.t > c.t) c = GL.data[sport] = { t: last.t, list: last.list, server: true }; }
+  if (hasOdds() && (force || !c || Date.now() - c.t > glTtl())) {
+    const list = await oddsGet(`${GL_KEYS[sport]}/odds`, { bookmakers: SHARP_SET, markets: 'h2h,spreads,totals', oddsFormat: 'american' });
+    c = GL.data[sport] = { t: Date.now(), list };
+  }
+  if (c) try { const all = JSON.parse(localStorage.getItem(GL_CACHE_KEY) || '{}'); all[sport] = c; localStorage.setItem(GL_CACHE_KEY, JSON.stringify(all)); } catch {}
+  return c;
+}
+function gloCompute(sport, c) {
+  const rows = [], minBooks = Math.max(2, STORE.ol.minBooks), now = Date.now();
+  const regs = [...REG.events.values()].filter(e => e.sport === sport && e.state === 'pre');
+  for (const oe of c.list || []) {
+    if (Date.parse(oe.commence_time) <= now) continue;
+    const H = oe.home_team, A = oe.away_team;
+    let reg = null, swap = false;
+    for (const e of regs) { const m = glMatch(e, [oe]); if (m) { reg = e; swap = m.swap; break; } }
+    const sim = reg ? APP.simCache.get(`${sport}:${reg.eventId}`) : null;
+    const ml = [], sp = [];
+    for (const bm of oe.bookmakers || []) for (const mk of bm.markets || []) {
+      const h = (mk.outcomes || []).find(x => x.name === H), a = (mk.outcomes || []).find(x => x.name === A);
+      if (!h || !a) continue;
+      const q = { book: bm.key, title: bm.title, h: +h.price, a: +a.price, upd: Date.parse(mk.last_update || bm.last_update) || null };
+      if (mk.key === 'h2h') ml.push(q);
+      if (mk.key === 'spreads' && Number.isFinite(+h.point) && +h.point === -a.point) sp.push({ ...q, pt: +h.point });
+    }
+    const groups = [{ kind: 'Moneyline', pt: null, qs: ml }, ...[...new Set(sp.map(x => x.pt))].map(pt => ({ kind: MARKET_NAMES[sport][0], pt, qs: sp.filter(x => x.pt === pt) }))];
+    for (const { kind, pt, qs } of groups) {
+      if (qs.length < minBooks) continue;
+      for (const side of ['home', 'away']) {
+        const k = side[0], top = [...qs].sort((x, y) => payout(y[k]) - payout(x[k]))[0];
+        const others = qs.filter(q => q.book !== top.book);
+        const pH = wMedian(others.map(q => devig(q.h, q.a)), others.map(q => bookW(q.book)));
+        if (pH === null || !Number.isFinite(pH)) continue;
+        const p = side === 'home' ? pH : 1 - pH, price = top[k], ev = p * payout(price) - (1 - p);
+        const team = side === 'home' ? H : A, line = pt === null ? null : side === 'home' ? pt : -pt;
+        // model %: moneyline always; spread only when the model ran at this exact number
+        const espnSide = !reg ? null : (side === 'home') !== swap ? 'home' : 'away';
+        let modelP = null;
+        if (sim && espnSide) {
+          if (pt === null) modelP = espnSide === 'home' ? sim.pHome : sim.pAway;
+          else { const Ls = sim.P?.lines?.spread, espnHomeLine = espnSide === 'home' ? line : -line; if (Ls !== null && Ls !== undefined && Ls === espnHomeLine) modelP = espnSide === 'home' ? sim.pHomeCover : sim.pAwayCover; }
+        }
+        const othersUpd = others.filter(q => q.upd).map(q => q.upd);
+        const ageMin = top.upd ? (c.t - top.upd) / 60e3 : null, lagMin = top.upd && othersUpd.length ? (median(othersUpd) - top.upd) / 60e3 : null;
+        rows.push({ id: `gl|${sport}|${oe.id}|${kind}|${side}|${line}`, sport, oeId: oe.id, reg, espnSide, label: `${shortTeam(A)} @ ${shortTeam(H)}`, start: oe.commence_time,
+          kind, team, side, line, pick: line === null ? `${team} ML` : `${team} ${signed(line, 1)}`, price, book: top.title, bookKey: top.book, p, ev, nBooks: qs.length, modelP,
+          prices: [...qs].sort((x, y) => payout(y[k]) - payout(x[k])).map(q => ({ book: q.title, price: q[k] })),
+          ageMin, lagMin, stale: (lagMin !== null && lagMin > 10) || (ageMin !== null && ageMin > STORE.ol.maxAge), stake: kellyStake(p, 1 - p, price) });
+      }
+    }
+  }
+  return rows;
+}
+async function gloScan(force = false) {
+  const sport = STORE.glo.tab; if (GLO.busy) return;
+  if (!hasOdds() && !SERVER.on) { GLO.err = 'Add your Odds API key (or turn on the background job) first.'; renderGLO(); return; }
+  GLO.busy = true; GLO.err = ''; renderGLO();
+  try {
+    const c = await glFetch(sport, force);
+    if (!c) throw new Error('No game lines available yet.');
+    GLO.rows = GLO.rows.filter(r => r.sport !== sport).concat(gloCompute(sport, c));
+    GLO.msg[sport] = { t: c.t, server: c.server, n: (c.list || []).filter(e => Date.parse(e.commence_time) > Date.now()).length };
+  } catch (e) { GLO.err = e.message; }
+  GLO.busy = false; renderGLO();
+}
+function trackGLO(id) {
+  const r = GLO.rows.find(x => x.id === id); if (!r || tracked(id)) return;
+  if (!r.reg) { GLO.err = 'Could not match this game to ESPN, so it can\'t be graded automatically. Track it by hand.'; renderGLO(); return; }
+  const ev = r.reg, mkt = r.kind === 'Moneyline' ? 'Moneyline' : MARKET_NAMES[r.sport][0];
+  STORE.bets.unshift({ id: newBetId(), src: id, kind: 'game', sport: r.sport, eventId: ev.eventId, label: `${ev.awayAbbr} @ ${ev.homeAbbr}`, start: ev.start,
+    pick: `${mkt}: ${r.pick}`, mkt, sideKey: r.espnSide, line: r.line, book: r.book, price: r.price, stake: r.stake || 0, pWin: r.p, pLose: 1 - r.p, ev: r.ev,
+    placedAt: new Date().toISOString(), status: 'open', close: null });
+  save(); renderGLO(); renderTracker();
+}
+function renderGLO() {
+  if (!$('gloBody')) return;
+  const g = STORE.glo, o = STORE.ol, sport = g.tab;
+  document.querySelectorAll('#gloTabs [data-glotab]').forEach(b => b.classList.toggle('on', b.dataset.glotab === sport));
+  $('gloML').checked = g.ml; $('gloSP').checked = g.sp; $('gloMinEV').value = g.minEV;
+  $('gloSpLabel').textContent = MARKET_NAMES[sport][0];
+  $('gloScanBtn').textContent = GLO.busy ? 'Loading…' : `Load ${sport} lines`; $('gloScanBtn').disabled = GLO.busy;
+  const m = GLO.msg[sport];
+  const base = GLO.rows.filter(r => r.sport === sport && (r.kind === 'Moneyline' ? g.ml : g.sp) && r.price >= o.min && r.price <= o.max && r.ev * 100 >= g.minEV);
+  const hidden = o.hideStale ? base.filter(r => r.stale).length : 0;
+  const rows = base.filter(r => !(o.hideStale && r.stale)).sort((a, b) => b.ev - a.ev).slice(0, 120);
+  $('gloStatus').innerHTML = (GLO.err ? `<div class="banner bad">${esc(GLO.err)}</div>` : '') + (m
+    ? `${sport}: ${m.n} games · lines from ${m.server ? 'the background job' : 'the books'} at ${hhmm(m.t)}${m.server ? ' (no credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
+    : `<span class="muted">Press Load to price ${sport} moneylines and ${MARKET_NAMES[sport][0].toLowerCase()}s. About 3 credits, or free if the lines were downloaded in the last 30 min.</span>`);
+  if (!m) { $('gloBody').innerHTML = ''; return; }
+  if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline or spread outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
+  $('gloBody').innerHTML = `<div class="ol-grid">${rows.map(r => {
+    const when = new Date(r.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    const age = r.ageMin === null ? '' : ` · updated ${r.ageMin < 1 ? '<1' : Math.round(r.ageMin)}m ago`, sus = r.ev > 0.15;
+    return `<div class="ol-card">
+      <div class="row between xs"><span><b>${{ NFL: '🏈', CFB: '🏟️', NBA: '🏀', NHL: '🏒' }[r.sport] || ''} ${esc(r.label)}</b> <span class="muted">${when}</span></span>
+        <span class="badge ${sus ? 's-questionable' : 's-verified'} mono">+${(r.ev * 100).toFixed(1)}%</span></div>
+      <div class="row between" style="margin-top:.5rem">
+        <div><div class="b">${esc(r.pick)}</div><div class="xs muted">${esc(r.kind)}</div></div>
+        <div class="xl xb mono green">${fmtOdds(r.price)}</div>
+      </div>
+      <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(toAmerican(r.p))} (${pct(r.p)}) · ${r.nBooks} books${age}</div>
+      <div class="row between xs" style="margin-top:.4rem">
+        <span>${r.modelP !== null && r.modelP !== undefined ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
+        <button type="button" class="${tracked(r.id) ? 'on' : 'btn-soft'}" data-glotrack="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓ Tracked' : '+ Track bet'}</button>
+      </div>
+      ${r.stale ? `<div class="xs amber" style="margin-top:.3rem">⚠ Possibly stale: ${r.lagMin !== null && r.lagMin > 10 ? `this book updated ${Math.round(r.lagMin)} min before the others` : `price is ${Math.round(r.ageMin)} min old`}.</div>` : ''}
+      ${sus ? '<div class="xs amber" style="margin-top:.3rem">Unusually large edge for a game line: usually a stale price or a wrong team/number. Double-check before betting.</div>' : ''}
+      <details class="xs" style="margin-top:.4rem"><summary class="muted">All books ▾</summary>
+        <div style="margin-top:.35rem">${r.prices.map(p => `<span class="badge s-unverified mono" style="margin:0 .25rem .25rem 0">${esc(p.book)} ${fmtOdds(p.price)}</span>`).join('')}</div>
+        <div class="muted" style="margin-top:.25rem">Fair price: sharp-weighted median of the other ${r.nBooks - 1} books, vig removed${r.line !== null ? `, all at ${esc(r.pick.split(' ').pop())}` : ''}.</div>
+      </details>
+    </div>`;
+  }).join('')}</div>`;
+}
+function bindGLO() {
+  $('gloTabs').addEventListener('click', e => { const b = e.target.closest('[data-glotab]'); if (!b || GLO.busy) return; STORE.glo.tab = b.dataset.glotab; GLO.err = ''; save(); renderGLO(); });
+  $('gloScanBtn').addEventListener('click', () => gloScan(false));
+  $('gloRefreshBtn').addEventListener('click', () => gloScan(true));
+  $('gloML').addEventListener('change', e => { STORE.glo.ml = e.target.checked; save(); renderGLO(); });
+  $('gloSP').addEventListener('change', e => { STORE.glo.sp = e.target.checked; save(); renderGLO(); });
+  $('gloMinEV').addEventListener('change', e => { const v = num(e.target.value); if (v !== null) STORE.glo.minEV = v; save(); renderGLO(); });
+  $('gloBody').addEventListener('click', e => { const b = e.target.closest('[data-glotrack]'); if (b) trackGLO(b.dataset.glotrack); });
 }
 
 /* =====================================================================
@@ -4983,6 +5143,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadRatings();
   bind();
   bindOutliers();
+  bindGLO();
   bindRatings();
   renderChrome();
   syncSport();

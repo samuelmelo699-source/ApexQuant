@@ -30,6 +30,10 @@ Deploy: drag this folder (or the zip) into https://app.netlify.com/drop.
 - Bet tracker: log bets, auto-capture closing prices ~15 min before start (app open) or by button, closing-line value, ROI, CSV export.
 - Everything you enter (ratings, picks, prices, bets, API key) stays in your browser's local storage.
 
+## Moneyline & spread outliers
+
+A separate section under Prop outliers, with tabs for NFL, CFB, NBA and NHL. It checks each book's moneyline and spread (puck line for NHL) against the no-vig consensus of the other books. Spreads only compare books at the same number. It costs about 3 credits per sport, or nothing when the lines were downloaded in the last 30 minutes or come from the background job. Tracked bets are graded automatically.
+
 ## Background job (optional, needs a GitHub deploy)
 
 Drag-and-drop uploads only publish the page. To turn on the background job, deploy the site from GitHub.
