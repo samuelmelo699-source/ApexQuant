@@ -1,0 +1,14 @@
+[build]
+  publish = "."
+  # no build step: the site is a single page; Netlify bundles the functions automatically
+  command = "echo ready"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# always fetch the newest page after an update (no stale copies on phones/iPads)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"
