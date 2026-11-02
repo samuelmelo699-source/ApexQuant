@@ -383,7 +383,7 @@
     <div class="card stack" id="gloSection">
       <div class="row between">
         <div>
-          <h2 class="sm xb">💵 Moneyline &amp; spread outliers</h2>
+          <h2 class="sm xb">💵 Moneyline, spread &amp; total outliers</h2>
           <p class="note" style="margin:0">Game lines from 10 books, each price checked against the other books' no-vig consensus. This section is separate from the props above and has its own Load button. It uses the Min/Max odds, Min books and Hide stale settings from the props section.</p>
         </div>
         <div class="row"><button type="button" id="gloScanBtn" class="btn-go">Load</button><button type="button" id="gloRefreshBtn" title="Ignore cache and re-download (about 3 credits)">↻ Force refresh</button></div>
@@ -397,6 +397,7 @@
       <div class="row xs" style="gap:1rem;flex-wrap:wrap;align-items:flex-end">
         <label class="row"><input type="checkbox" id="gloML"> Moneyline</label>
         <label class="row"><input type="checkbox" id="gloSP"> <span id="gloSpLabel">Spread</span></label>
+        <label class="row"><input type="checkbox" id="gloTOT"> <span id="gloTotLabel">Total (over/under)</span></label>
         <div><label class="muted" for="gloMinEV">Min EV %</label><input id="gloMinEV" type="number" step="0.5" class="mono" style="width:6rem"></div>
       </div>
       <div class="xs" id="gloStatus"></div>
@@ -3979,7 +3980,7 @@ async function applyBookGameLines(sport, force = false) {
    Data = the 10-book game-line download (3 credits per sport; free when the background
    job's snapshot is fresh or the app already downloaded it in the last 30 min).
    ===================================================================== */
-STORE.glo = { tab: 'NBA', ml: true, sp: true, minEV: 2, ...(STORE.glo || {}) };
+STORE.glo = { tab: 'NBA', ml: true, sp: true, tot: true, minEV: 2, ...(STORE.glo || {}) };
 const GLO = { rows: [], busy: false, msg: {}, err: '' };
 async function glFetch(sport, force = false) {
   let c = GL.data[sport];
@@ -4002,35 +4003,42 @@ function gloCompute(sport, c) {
     let reg = null, swap = false;
     for (const e of regs) { const m = glMatch(e, [oe]); if (m) { reg = e; swap = m.swap; break; } }
     const sim = reg ? APP.simCache.get(`${sport}:${reg.eventId}`) : null;
-    const ml = [], sp = [];
+    const ml = [], sp = [], tot = [];
     for (const bm of oe.bookmakers || []) for (const mk of bm.markets || []) {
+      if (mk.key === 'totals') {
+        const ov = (mk.outcomes || []).find(x => /^over$/i.test(x.name)), un = (mk.outcomes || []).find(x => /^under$/i.test(x.name));
+        if (ov && un && Number.isFinite(+ov.point) && +ov.point === +un.point) tot.push({ book: bm.key, title: bm.title, h: +ov.price, a: +un.price, pt: +ov.point, upd: Date.parse(mk.last_update || bm.last_update) || null });
+        continue;
+      }
       const h = (mk.outcomes || []).find(x => x.name === H), a = (mk.outcomes || []).find(x => x.name === A);
       if (!h || !a) continue;
       const q = { book: bm.key, title: bm.title, h: +h.price, a: +a.price, upd: Date.parse(mk.last_update || bm.last_update) || null };
       if (mk.key === 'h2h') ml.push(q);
       if (mk.key === 'spreads' && Number.isFinite(+h.point) && +h.point === -a.point) sp.push({ ...q, pt: +h.point });
     }
-    const groups = [{ kind: 'Moneyline', pt: null, qs: ml }, ...[...new Set(sp.map(x => x.pt))].map(pt => ({ kind: MARKET_NAMES[sport][0], pt, qs: sp.filter(x => x.pt === pt) }))];
-    for (const { kind, pt, qs } of groups) {
+    const groups = [{ kind: 'Moneyline', pt: null, qs: ml }, ...[...new Set(sp.map(x => x.pt))].map(pt => ({ kind: MARKET_NAMES[sport][0], pt, qs: sp.filter(x => x.pt === pt) })),
+      ...[...new Set(tot.map(x => x.pt))].map(pt => ({ kind: MARKET_NAMES[sport][1], pt, qs: tot.filter(x => x.pt === pt), total: true }))];
+    for (const { kind, pt, qs, total } of groups) {
       if (qs.length < minBooks) continue;
-      for (const side of ['home', 'away']) {
-        const k = side[0], top = [...qs].sort((x, y) => payout(y[k]) - payout(x[k]))[0];
+      for (const side of total ? ['over', 'under'] : ['home', 'away']) {
+        const k = side === 'home' || side === 'over' ? 'h' : 'a', top = [...qs].sort((x, y) => payout(y[k]) - payout(x[k]))[0];
         const others = qs.filter(q => q.book !== top.book);
         const pH = wMedian(others.map(q => devig(q.h, q.a)), others.map(q => bookW(q.book)));
         if (pH === null || !Number.isFinite(pH)) continue;
-        const p = side === 'home' ? pH : 1 - pH, price = top[k], ev = p * payout(price) - (1 - p);
-        const team = side === 'home' ? H : A, line = pt === null ? null : side === 'home' ? pt : -pt;
+        const p = k === 'h' ? pH : 1 - pH, price = top[k], ev = p * payout(price) - (1 - p);
+        const team = total ? '' : side === 'home' ? H : A, line = pt === null ? null : total ? pt : side === 'home' ? pt : -pt;
         // model %: moneyline always; spread only when the model ran at this exact number
-        const espnSide = !reg ? null : (side === 'home') !== swap ? 'home' : 'away';
+        const espnSide = !reg ? null : total ? side : (side === 'home') !== swap ? 'home' : 'away';
         let modelP = null;
         if (sim && espnSide) {
-          if (pt === null) modelP = espnSide === 'home' ? sim.pHome : sim.pAway;
+          if (total) { const Lt = sim.P?.lines?.total; if (Lt === pt) modelP = side === 'over' ? sim.pOver : sim.pUnder; }
+          else if (pt === null) modelP = espnSide === 'home' ? sim.pHome : sim.pAway;
           else { const Ls = sim.P?.lines?.spread, espnHomeLine = espnSide === 'home' ? line : -line; if (Ls !== null && Ls !== undefined && Ls === espnHomeLine) modelP = espnSide === 'home' ? sim.pHomeCover : sim.pAwayCover; }
         }
         const othersUpd = others.filter(q => q.upd).map(q => q.upd);
         const ageMin = top.upd ? (c.t - top.upd) / 60e3 : null, lagMin = top.upd && othersUpd.length ? (median(othersUpd) - top.upd) / 60e3 : null;
         rows.push({ id: `gl|${sport}|${oe.id}|${kind}|${side}|${line}`, sport, oeId: oe.id, reg, espnSide, label: `${shortTeam(A)} @ ${shortTeam(H)}`, start: oe.commence_time,
-          kind, team, side, line, pick: line === null ? `${team} ML` : `${team} ${signed(line, 1)}`, price, book: top.title, bookKey: top.book, p, ev, nBooks: qs.length, modelP,
+          kind, team, side, line, pick: total ? `${side === 'over' ? 'Over' : 'Under'} ${pt}` : line === null ? `${team} ML` : `${team} ${signed(line, 1)}`, total: Boolean(total), price, book: top.title, bookKey: top.book, p, ev, nBooks: qs.length, modelP,
           prices: [...qs].sort((x, y) => payout(y[k]) - payout(x[k])).map(q => ({ book: q.title, price: q[k] })),
           ageMin, lagMin, stale: (lagMin !== null && lagMin > 10) || (ageMin !== null && ageMin > STORE.ol.maxAge), stake: kellyStake(p, 1 - p, price) });
       }
@@ -4053,7 +4061,7 @@ async function gloScan(force = false) {
 function trackGLO(id) {
   const r = GLO.rows.find(x => x.id === id); if (!r || tracked(id)) return;
   if (!r.reg) { GLO.err = 'Could not match this game to ESPN, so it can\'t be graded automatically. Track it by hand.'; renderGLO(); return; }
-  const ev = r.reg, mkt = r.kind === 'Moneyline' ? 'Moneyline' : MARKET_NAMES[r.sport][0];
+  const ev = r.reg, mkt = r.kind === 'Moneyline' ? 'Moneyline' : r.total ? MARKET_NAMES[r.sport][1] : MARKET_NAMES[r.sport][0];
   STORE.bets.unshift({ id: newBetId(), src: id, kind: 'game', sport: r.sport, eventId: ev.eventId, label: `${ev.awayAbbr} @ ${ev.homeAbbr}`, start: ev.start,
     pick: `${mkt}: ${r.pick}`, mkt, sideKey: r.espnSide, line: r.line, book: r.book, price: r.price, stake: r.stake || 0, pWin: r.p, pLose: 1 - r.p, ev: r.ev,
     placedAt: new Date().toISOString(), status: 'open', close: null });
@@ -4063,18 +4071,18 @@ function renderGLO() {
   if (!$('gloBody')) return;
   const g = STORE.glo, o = STORE.ol, sport = g.tab;
   document.querySelectorAll('#gloTabs [data-glotab]').forEach(b => b.classList.toggle('on', b.dataset.glotab === sport));
-  $('gloML').checked = g.ml; $('gloSP').checked = g.sp; $('gloMinEV').value = g.minEV;
-  $('gloSpLabel').textContent = MARKET_NAMES[sport][0];
+  $('gloML').checked = g.ml; $('gloSP').checked = g.sp; $('gloTOT').checked = g.tot; $('gloMinEV').value = g.minEV;
+  $('gloSpLabel').textContent = MARKET_NAMES[sport][0]; $('gloTotLabel').textContent = `${MARKET_NAMES[sport][1]} (over/under)`;
   $('gloScanBtn').textContent = GLO.busy ? 'Loading…' : `Load ${sport} lines`; $('gloScanBtn').disabled = GLO.busy;
   const m = GLO.msg[sport];
-  const base = GLO.rows.filter(r => r.sport === sport && (r.kind === 'Moneyline' ? g.ml : g.sp) && r.price >= o.min && r.price <= o.max && r.ev * 100 >= g.minEV);
+  const base = GLO.rows.filter(r => r.sport === sport && (r.kind === 'Moneyline' ? g.ml : r.total ? g.tot : g.sp) && r.price >= o.min && r.price <= o.max && r.ev * 100 >= g.minEV);
   const hidden = o.hideStale ? base.filter(r => r.stale).length : 0;
   const rows = base.filter(r => !(o.hideStale && r.stale)).sort((a, b) => b.ev - a.ev).slice(0, 120);
   $('gloStatus').innerHTML = (GLO.err ? `<div class="banner bad">${esc(GLO.err)}</div>` : '') + (m
     ? `${sport}: ${m.n} games · lines from ${m.server ? 'the background job' : 'the books'} at ${hhmm(m.t)}${m.server ? ' (no credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
-    : `<span class="muted">Press Load to price ${sport} moneylines and ${MARKET_NAMES[sport][0].toLowerCase()}s. About 3 credits, or free if the lines were downloaded in the last 30 min.</span>`);
+    : `<span class="muted">Press Load to price ${sport} moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals. About 3 credits, or free if the lines were downloaded in the last 30 min.</span>`);
   if (!m) { $('gloBody').innerHTML = ''; return; }
-  if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline or spread outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
+  if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline, spread or total outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
   $('gloBody').innerHTML = `<div class="ol-grid">${rows.map(r => {
     const when = new Date(r.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     const age = r.ageMin === null ? '' : ` · updated ${r.ageMin < 1 ? '<1' : Math.round(r.ageMin)}m ago`, sus = r.ev > 0.15;
@@ -4094,7 +4102,7 @@ function renderGLO() {
       ${sus ? '<div class="xs amber" style="margin-top:.3rem">Unusually large edge for a game line: usually a stale price or a wrong team/number. Double-check before betting.</div>' : ''}
       <details class="xs" style="margin-top:.4rem"><summary class="muted">All books ▾</summary>
         <div style="margin-top:.35rem">${r.prices.map(p => `<span class="badge s-unverified mono" style="margin:0 .25rem .25rem 0">${esc(p.book)} ${fmtOdds(p.price)}</span>`).join('')}</div>
-        <div class="muted" style="margin-top:.25rem">Fair price: sharp-weighted median of the other ${r.nBooks - 1} books, vig removed${r.line !== null ? `, all at ${esc(r.pick.split(' ').pop())}` : ''}.</div>
+        <div class="muted" style="margin-top:.25rem">Fair price: sharp-weighted median of the other ${r.nBooks - 1} books, vig removed${r.line !== null ? `, all at ${r.total ? r.line : esc(r.pick.split(' ').pop())}` : ''}.</div>
       </details>
     </div>`;
   }).join('')}</div>`;
@@ -4105,6 +4113,7 @@ function bindGLO() {
   $('gloRefreshBtn').addEventListener('click', () => gloScan(true));
   $('gloML').addEventListener('change', e => { STORE.glo.ml = e.target.checked; save(); renderGLO(); });
   $('gloSP').addEventListener('change', e => { STORE.glo.sp = e.target.checked; save(); renderGLO(); });
+  $('gloTOT').addEventListener('change', e => { STORE.glo.tot = e.target.checked; save(); renderGLO(); });
   $('gloMinEV').addEventListener('change', e => { const v = num(e.target.value); if (v !== null) STORE.glo.minEV = v; save(); renderGLO(); });
   $('gloBody').addEventListener('click', e => { const b = e.target.closest('[data-glotrack]'); if (b) trackGLO(b.dataset.glotrack); });
 }
