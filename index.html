@@ -226,12 +226,12 @@
 
         <div class="inset grid g4">
           <div>
-            <label class="row xs" style="gap:.4rem"><input type="checkbox" id="anchor" checked> <b>Anchor to market</b></label>
-            <label class="row xs" style="gap:.4rem;margin-top:.3rem"><input type="checkbox" id="autoInj"> Auto-apply ESPN injury report (stats mode)</label>
+            <label class="row xs" style="gap:.4rem;display:none"><input type="checkbox" id="anchor"> <b>Anchor to market</b></label>
+            <label class="row xs" style="gap:.4rem"><input type="checkbox" id="autoInj"> Auto-apply ESPN injury report</label>
             <div class="note" id="anchorNote">Sliders at 50 = agree with the market. Move them only where you disagree.</div>
           </div>
           <div id="hfaWrap">
-            <div class="slider-row"><label for="hfa">Home advantage (unanchored)</label><b id="hfaVal" class="mono sky"></b></div>
+            <div class="slider-row"><label for="hfa">Home advantage</label><b id="hfaVal" class="mono sky"></b></div>
             <input id="hfa" type="range" min="0" max="5" step="0.1">
           </div>
           <div class="g2s">
@@ -280,7 +280,7 @@
       <div class="row between">
         <div>
           <h2 class="sm xb">Slate &amp; edges</h2>
-          <p class="note" style="margin:0">Each game uses its own lines and the ratings you saved for each team. With market anchoring on, games you haven't rated show no edge, which is the honest answer.</p>
+          <p class="note" style="margin:0">Each game is projected from team ratings, stats and injuries only. The betting lines are used just to compare and price the bets, never inside the model's %.</p>
         </div>
         <label class="row xs"><input type="checkbox" id="slateOnlyEdges"> Only show EV &gt; 0</label>
       </div>
@@ -513,7 +513,7 @@
   </section>
 
   <p class="note center">Model output only. Not betting advice. Lines and injuries come from ESPN's public API and can lag the books.</p>
-  <p class="note center mono" id="buildTag">APEXQUANT version 2026-11-02 · stages 1-5: projections, defense vs position, auto-tuning, line movement, weather, lineups, referees, background job</p>
+  <p class="note center mono" id="buildTag">APEXQUANT version 2026-11-02b · model % uses no betting lines · stages 1-5: projections, defense vs position, auto-tuning, line movement, weather, lineups, referees, background job</p>
 </main>
 
 <script>
@@ -590,7 +590,9 @@ const PLAYABLE = new Set(['verified', 'questionable']);
 const STORE_KEY = 'apexquant.v2';
 const STORE = (() => {
   const base = { ratings: {}, picks: {}, statusOv: {}, lines: {}, propBook: {}, tdBook: {}, anchor: true, hfa: {} };
-  try { return Object.assign(base, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch { return base; }
+  let st; try { st = Object.assign(base, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch { st = base; }
+  st.anchor = false;      // the model never starts from the betting lines: stats + ratings only
+  return st;
 })();
 let saveTimer = null;
 let RESTORING = false;
@@ -1526,7 +1528,7 @@ function projection(ev, P) {
   // Football/basketball: anchor to the spread; if only a moneyline exists, convert it to a margin.
   const market = L.total !== null && (countSport ? Boolean(nv) : (L.spread !== null || Boolean(nv)));
   let muMargin, muTotal, basis;
-  if (P.anchor && market) {
+  if (false && P.anchor && market) {     // market anchoring is switched off for good: the model's % must not contain the betting lines
     let T = L.total;
     let m0;
     if (countSport) {
@@ -1945,7 +1947,7 @@ function nbaMinutesPlan(ev, teamId, sim) {
   // back-to-back & blowout
   const start = new Date(ev.start).getTime(), last = teamGames('NBA', teamId).find(g => new Date(g.date).getTime() < start - 3 * 3600e3);
   const b2b = last && (start - new Date(last.date).getTime()) / 864e5 < 1.4;
-  const L = sim.P.lines, mySp = L.spread === null || L.spread === undefined ? 0 : (teamId === ev.homeTeamId ? L.spread : -L.spread);
+  const mySp = teamId === ev.homeTeamId ? sim.avgAway - sim.avgHome : sim.avgHome - sim.avgAway;   // model's projected margin (negative = favourite), not the betting spread
   const confirmed = REG.pregame[`NBA:${ev.eventId}`]?.starters?.[String(teamId)];
   const starters = new Set(confirmed || buildSlots('NBA', teamId, ev).filter(s => s.player && s.slot !== '6TH').map(s => s.player.playerId));
   if (confirmed) {
@@ -2212,7 +2214,7 @@ function renderSetup() {
   $('lblSpread').textContent = `Home ${spName.toLowerCase()}`;
   $('lblTotal').textContent = totName;
   $('anchorNote').textContent = !STORE.anchor
-    ? (REG.autoAt[ev.sport] ? `Stats model: sliders start at each team's season rating (${esc(REG.autoMeta?.[ev.sport] || 'ESPN standings')}, updated ${timeStr(REG.autoAt[ev.sport])}). Edges = stats vs market.` : 'Stats model: season ratings not loaded yet. Sliders are neutral.')
+    ? (REG.autoAt[ev.sport] ? `Stats model: sliders start at each team's season rating (${esc(REG.autoMeta?.[ev.sport] || 'ESPN standings')}, updated ${timeStr(REG.autoAt[ev.sport])}). The model's % never uses the betting lines; the lines are only what it's compared against.` : 'Stats model: season ratings not loaded yet. Sliders are neutral.')
     : SPORTS[ev.sport].derivedSpread ? 'Anchors to the moneyline + total. Sliders at 50 = agree with the market.'
     : 'Sliders at 50 = agree with the market. Move them only where you disagree.';
   $('anchor').checked = STORE.anchor;
@@ -2391,7 +2393,7 @@ function fitTune() {
   return out;
 }
 // model weight to use for a market (1 = model only, today's behaviour)
-function tuneW(key) { if (!STORE.tune.on) return 1; const g = STORE.tune.groups?.[key]; return g?.active ? g.w : 1; }
+function tuneW(key) { return 1; }   // the model % is never mixed with the books (the tuning table is shown for information only)
 const blendP = (pModel, pMkt, w) => pMkt === null || pMkt === undefined || w >= 0.999 ? pModel : w * pModel + (1 - w) * pMkt;
 
 function propEval(row) {
@@ -2549,13 +2551,11 @@ function explainProp(id) {
   // tonight's team total implied by the betting lines (or the model's projection)
   const teamAvg = mine?.pf ?? avgOf(teamGames(sport, teamId).map(g => g.pf));
   let teamImp = null, impliedSrc = '';
-  if (L.total !== null && L.total !== undefined && L.spread !== null && L.spread !== undefined && !SPORTS[sport].derivedSpread) {
-    const homeT = (L.total - L.spread) / 2; teamImp = isHome ? homeT : L.total - homeT; impliedSrc = 'from the spread and total';
-  } else { teamImp = isHome ? sim.avgHome : sim.avgAway; impliedSrc = 'model projection'; }
+  teamImp = isHome ? sim.avgHome : sim.avgAway; impliedSrc = 'model projection';   // the model's own team total, never the betting lines
   if (teamImp && teamAvg) {
     const k = teamImp / teamAvg, lean = k >= 1.03 ? 'over' : k <= 0.97 ? 'under' : null;
     fact(`${esc(myAbbr)} expected ${TU} tonight`, `${fmtN(teamImp, d1)}`, lean, `season avg ${fmtN(teamAvg, d1)} · ${impliedSrc}`);
-    if (lean) add(lean === 'over' ? over : under, 2, lean === 'over' ? `<b>Big scoring night expected:</b> the lines put ${esc(myAbbr)} at about ${fmtN(teamImp, d1)} ${TU} (${impliedSrc}), above their ${fmtN(teamAvg, d1)} average.` : `<b>Low team total:</b> ${esc(myAbbr)} expected around ${fmtN(teamImp, d1)} ${TU} (${impliedSrc}), below their ${fmtN(teamAvg, d1)} average.`);
+    if (lean) add(lean === 'over' ? over : under, 2, lean === 'over' ? `<b>Big scoring night expected:</b> the model projects ${esc(myAbbr)} at about ${fmtN(teamImp, d1)} ${TU} (${impliedSrc}), above their ${fmtN(teamAvg, d1)} average.` : `<b>Low team total:</b> ${esc(myAbbr)} expected around ${fmtN(teamImp, d1)} ${TU} (${impliedSrc}), below their ${fmtN(teamAvg, d1)} average.`);
   }
   // rest / back-to-backs (NBA, NHL)
   const start = new Date(ev.start).getTime();
@@ -2568,17 +2568,17 @@ function explainProp(id) {
     if (b2bMe) add(under, 2, `<b>Tired legs:</b> ${esc(myAbbr)} played last night (back-to-back). Shooting and minutes often dip, and stars sometimes rest.`);
     if (b2bOpp) add(over, 1, `${esc(oppAbbr)} are on a back-to-back: tired defenses give up more.`);
   }
-  // spread / game script
-  if (L.spread !== null && L.spread !== undefined && !SPORTS[sport].derivedSpread) {
-    const mySpread = isHome ? L.spread : -L.spread;   // negative = favourite
+  // game script from the MODEL's projected margin (not the betting spread)
+  {
+    const mySpread = +((isHome ? sim.avgAway - sim.avgHome : sim.avgHome - sim.avgAway).toFixed(1));   // negative = model favourite
     if (sport === 'NBA' && Math.abs(mySpread) >= 9.5) {
-      if (r.slot === '6TH') add(over, 1, `Big spread (${esc(myAbbr)} ${signed(mySpread)}): blowouts give bench players extra minutes.`);
-      else add(under, 2, `<b>Blowout risk:</b> ${esc(myAbbr)} ${signed(mySpread)}. Starters can sit the whole 4th quarter if it gets out of hand.`);
+      if (r.slot === '6TH') add(over, 1, `Model projects a blowout (${esc(myAbbr)} by ${fmtN(-mySpread)}): blowouts give bench players extra minutes.`);
+      else add(under, 2, `<b>Blowout risk:</b> the model has ${esc(myAbbr)} ${mySpread < 0 ? 'winning' : 'losing'} by ${fmtN(Math.abs(mySpread))}. Starters can sit the whole 4th quarter if it gets out of hand.`);
     }
     if (sport === 'NFL' && Math.abs(mySpread) >= 6.5) {
       const fav = mySpread < 0;
-      if (RUSHING.has(r.market) || (r.market === 'anytime_td' && /RB/.test(r.slot))) add(fav ? over : under, 2, fav ? `<b>Game script:</b> ${esc(myAbbr)} are ${signed(mySpread)} favorites, and teams protecting a lead run the ball more.` : `<b>Game script:</b> ${esc(myAbbr)} are ${signed(mySpread)} underdogs, and trailing teams abandon the run.`);
-      else if (PASSING.has(r.market)) add(fav ? under : over, 2, fav ? `<b>Game script:</b> ${esc(myAbbr)} are ${signed(mySpread)} favorites. With a lead they throw less late.` : `<b>Game script:</b> ${esc(myAbbr)} are ${signed(mySpread)} underdogs. Playing from behind means more passes.`);
+      if (RUSHING.has(r.market) || (r.market === 'anytime_td' && /RB/.test(r.slot))) add(fav ? over : under, 2, fav ? `<b>Game script:</b> ${esc(myAbbr)} projected to win by ${fmtN(-mySpread)}, and teams protecting a lead run the ball more.` : `<b>Game script:</b> ${esc(myAbbr)} projected to lose by ${fmtN(mySpread)}, and trailing teams abandon the run.`);
+      else if (PASSING.has(r.market)) add(fav ? under : over, 2, fav ? `<b>Game script:</b> ${esc(myAbbr)} projected to win by ${fmtN(-mySpread)}. With a lead they throw less late.` : `<b>Game script:</b> ${esc(myAbbr)} projected to lose by ${fmtN(mySpread)}. Playing from behind means more passes.`);
     }
   }
 
@@ -2700,21 +2700,16 @@ function explainProp(id) {
   if (mv && mv.toward) {
     const towardTxt = mv.toward === 'over' ? (r.binary ? 'yes' : 'over') : (r.binary ? 'no' : 'under');
     const desc = r.binary ? `${fmtOdds(mv.open)} → ${fmtOdds(mv.now)}` : mv.dLine ? `${mv.open.line} → ${mv.now.line}` : `${fmtOdds(mv.open.over)}/${fmtOdds(mv.open.under)} → ${fmtOdds(mv.now.over)}/${fmtOdds(mv.now.under)}`;
-    fact('Line movement', desc, mv.toward, `since ${hhmm(mv.t0)} · money on the ${towardTxt}`);
-    const big = r.binary ? Math.abs(mv.dP) >= 0.04 : (Math.abs(mv.dLine) >= Math.max(1, line * 0.05) || Math.abs(mv.dP ?? 0) >= 0.06);
-    add(mv.toward === 'over' ? over : under, big ? 2 : 1, `<b>Line movement:</b> ${r.binary ? `his price went from ${fmtOdds(mv.open)} to ${fmtOdds(mv.now)}` : mv.dLine ? `the line moved from ${mv.open.line} to ${mv.now.line}` : `the price moved from ${fmtOdds(mv.open.over)}/${fmtOdds(mv.open.under)} to ${fmtOdds(mv.now.over)}/${fmtOdds(mv.now.under)}`} since ${hhmm(mv.t0)}: bettors (often sharp money) are on the ${towardTxt}.`);
+    fact('Line movement (market, not in model)', desc, null, `since ${hhmm(mv.t0)} · money on the ${towardTxt}`);
+    notes.push(`Market info only (not used in the model %): money has come in on the ${towardTxt} since ${hhmm(mv.t0)}.`);
   }
   // the market
   if (pMkt !== null) {
     const gap = pOver - pMkt;
     if (!r.binary && bk?.over && bk?.under) {
-      fact('Book price', `O ${fmtN(line)} ${fmtOdds(bk.over)} · U ${fmtOdds(bk.under)}`, pMkt >= 0.55 ? 'over' : pMkt <= 0.45 ? 'under' : null, `no-vig over ${pct(pMkt, 0)}${bk.nBooks ? ` · ${bk.nBooks} books` : ''}`);
-      if (pMkt >= 0.55) add(over, 1, `The books lean over: ${fmtOdds(bk.over)} / ${fmtOdds(bk.under)} prices the over at ${pct(pMkt, 0)} after removing the vig.`);
-      else if (pMkt <= 0.45) add(under, 1, `The books lean under: ${fmtOdds(bk.over)} / ${fmtOdds(bk.under)} prices the under at ${pct(1 - pMkt, 0)} after removing the vig.`);
+      fact('Book price (market, not in model)', `O ${fmtN(line)} ${fmtOdds(bk.over)} · U ${fmtOdds(bk.under)}`, null, `no-vig over ${pct(pMkt, 0)}${bk.nBooks ? ` · ${bk.nBooks} books` : ''}`);
     }
     notes.unshift(`Model ${pct(pOver)} ${yesNo[0].toLowerCase()} vs market ${pct(pMkt)}: ${Math.abs(gap) < 0.03 ? 'basically agrees with the books' : `the model is ${gap > 0 ? 'higher' : 'lower'} by ${pct(Math.abs(gap))}`}.`);
-    const tw = !r.binary ? tuneW(`${sport} ${r.label}`) : 1;
-    if (tw < 0.999) notes.unshift(`Auto-tuned: the report card shows the books have been more accurate on ${esc(sport + ' ' + r.label)}, so EV here uses ${Math.round(tw * 100)}% model / ${Math.round((1 - tw) * 100)}% books (${pct(tw * pOver + (1 - tw) * pMkt)} ${yesNo[0].toLowerCase()}).`);
   }
   const score = l => l.reduce((a, x) => a + x.w, 0);
   const so = score(over), su = score(under);
@@ -4669,9 +4664,9 @@ function renderReport() {
         <td class="xs">${m.bm === null ? '—' : m.bm < m.bk ? '<span class="green">Model</span>' : '<span class="amber">Market</span>'}</td>
         <td class="mono">${m.nb}</td><td class="mono ${m.roi > 0 ? 'green' : m.roi < 0 ? 'rose' : ''}">${sgn(m.roi)}</td></tr>`).join('')}</tbody></table></div>
     ${(() => { const T = STORE.tune.groups || {}, ks = Object.keys(T).filter(k => !o.sport || k.startsWith(o.sport)).sort((a, b) => T[b].n - T[a].n);
-      return ks.length ? `<div class="inset stack" style="gap:.4rem"><div class="row between"><b class="xs">Auto-tuning: how much to trust the model vs the books, per market</b><label class="row xs"><input type="checkbox" id="tuneOn" ${STORE.tune.on ? 'checked' : ''}> apply to EV</label></div>
+      return ks.length ? `<div class="inset stack" style="gap:.4rem"><div class="row between"><b class="xs">Auto-tuning: how much to trust the model vs the books, per market</b><span class="xs muted">Info only: never mixed into the model %</span></div>
         <div class="table-wrap"><table><thead><tr><th>Market</th><th>Graded</th><th>Model weight used</th><th>Best fit</th><th>Brier model / books / mix</th><th>Status</th></tr></thead><tbody>
-        ${ks.map(k => { const g = T[k]; return `<tr><td><b>${esc(k.replace('|', ' '))}</b></td><td class="mono">${g.n}</td><td class="mono b">${g.active ? `${Math.round(g.w * 100)}% model · ${Math.round((1 - g.w) * 100)}% books` : '100% model'}</td><td class="mono muted">${Math.round(g.fit * 100)}%</td><td class="mono xs">${g.bModel.toFixed(4)} / ${g.bMarket.toFixed(4)} / ${g.bBlend.toFixed(4)}</td><td class="xs ${g.active ? 'green' : 'muted'}">${g.active ? (g.w < 0.9 ? 'leaning on the books' : 'model holding up') : `needs ${30 - g.n} more`}</td></tr>`; }).join('')}
+        ${ks.map(k => { const g = T[k]; return `<tr><td><b>${esc(k.replace('|', ' '))}</b></td><td class="mono">${g.n}</td><td class="mono b">100% model</td><td class="mono muted">${Math.round(g.fit * 100)}%</td><td class="mono xs">${g.bModel.toFixed(4)} / ${g.bMarket.toFixed(4)} / ${g.bBlend.toFixed(4)}</td><td class="xs ${g.active ? 'green' : 'muted'}">${g.active ? (g.w < 0.9 ? 'leaning on the books' : 'model holding up') : `needs ${30 - g.n} more`}</td></tr>`; }).join('')}
         </tbody></table></div><div class="xs muted">The weight starts at 100% model and moves toward the best fit as results pile up (after 30 graded per market). Lower weight = the books have been more accurate there, so the app trusts them more and shows fewer, smaller edges in that market.</div></div>` : ''; })()}
     <p class="note" style="margin:0">"Over"/"home"/"yes" is what each prediction measures; the edge-bet test takes whichever side the model liked at the price that was posted. Market probability = the no-vig price from both sides of the book line. Pushes and players who didn't play are left out. Spread and total predictions are skipped when ESPN didn't post real prices (−110 assumed).</p>`;
 }
