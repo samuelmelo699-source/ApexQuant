@@ -2367,7 +2367,8 @@ function renderSummary(sim) {
   let note = '';
   if (pr.basis.startsWith('market') && !rated) note = `<div class="banner warn">Market-anchored with neutral ratings: the model is repeating the market, so any edge below is just simulation noise. Move the sliders where you disagree with the line.</div>`;
   if (!pr.basis.startsWith('market') && L.total !== null && Math.abs(sim.avgAway + sim.avgHome - L.total) > (SPORTS[ev.sport].kind === 'poisson' ? 0.6 : 5))
-    note = `<div class="banner warn">Unanchored projection total (${(sim.avgAway + sim.avgHome).toFixed(1)}) is far from the market (${L.total}). Large gaps usually mean the ratings are off, not that the book is.</div>`;
+    note = (() => { const mt = sim.avgAway + sim.avgHome, gap = mt - L.total, early = Math.max(REG.auto[teamKey(ev.sport, ev.awayTeamId)]?.gp ?? 0, REG.auto[teamKey(ev.sport, ev.homeTeamId)]?.gp ?? 0) < 6;
+      return `<div class="banner warn">Model total ${mt.toFixed(1)} is ${Math.abs(gap).toFixed(1)} ${UNIT[ev.sport] || 'pts'} ${gap < 0 ? 'below' : 'above'} the books' ${L.total}. The model doesn't use the betting line, so gaps like this are usually the ratings missing something (${early ? 'early season: ratings are still mostly last season, pulled toward average' : 'pace, injuries or lineup news'}), not the book being wrong. Be careful betting the ${gap < 0 ? 'under' : 'over'} on this one.</div>`; })();
 
   const pg = REG.pregame[`${ev.sport}:${ev.eventId}`], W = weatherEffect(ev), RT = pg?.refs?.length ? refTendency(ev.sport, pg.refs) : null;
   const cond = [];
