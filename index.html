@@ -427,7 +427,7 @@
       <div class="row between">
         <div>
           <h2 class="sm xb">📰 Daily recap</h2>
-          <p class="note" style="margin:0">Every game's result next to what the model said <b>before</b> it started, using your sliders and settings at that time (tap "Model before the game" to see them). <span class="green b">Green</span> = the side the model gave the higher %, <span class="rose b">red</span> = the side it gave the lower %. Inside each chip, <b>✓</b> shows what actually happened (won, covered, hit) and ✗ what didn't. "✓ model" means the model's higher side was right.</p>
+          <p class="note" style="margin:0">Every game's result next to what the model said <b>before</b> it started, using your sliders and settings at that time (tap "Model before the game" to see them). Only the result is coloured: <span class="green b">green</span> when the side the model gave the higher % won (covered, hit), <span class="rose b">red</span> when the side it gave the lower % won. The other side stays grey, and so do games that aren't final.</p>
         </div>
         <button type="button" id="recapGrade" class="btn-go">↻ Update results</button>
       </div>
@@ -4936,11 +4936,14 @@ async function recapLogAll() {
 const dayKey = iso => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 STORE.recap = { sport: '', props: true, q: '', ...(STORE.recap || {}) };
 function recapChip(kind, text, title = '') { return `<span class="rc-chip rc-${kind}" title="${esc(title)}">${text}</span>`; }
-// one market's sides coloured by the model's %: highest = green, lowest = red (a 3rd side in between = grey); ✓/✗ = result
+// one market's sides: only the side that actually happened is coloured — green if the model had it as the
+// higher %, red if the model had it lower (an upset vs the model). Everything else, and pending games, stays grey.
 function rcSides(sides) {
-  const ps = sides.map(x => x.p), hi = Math.max(...ps), lo = Math.min(...ps), tie = hi - lo < 0.005;
+  const hi = Math.max(...sides.map(x => x.p));
+  const won = sides.find(x => x.hit === true), others = sides.filter(x => x !== won);
+  const favWon = won && others.every(x => won.p > x.p + 0.005), dogWon = won && others.some(x => x.p > won.p + 0.005);
   return sides.map(x => {
-    const kind = tie ? 'pend' : x.p === hi ? 'win' : x.p === lo ? 'loss' : 'pend';
+    const kind = x !== won ? 'pend' : favWon ? 'win' : dogWon ? 'loss' : 'pend';
     const tag = x.hit === true ? ` · <b>✓ ${x.yes}</b>` : x.hit === false ? ` · <span class="rc-x">✗ ${x.no}</span>` : '';
     return recapChip(kind, `${x.label} · model ${pct(x.p, 0)}${tag}`, x.p === hi ? 'the model rated this side higher' : 'the model rated this side lower');
   }).join('');
@@ -4974,7 +4977,7 @@ function renderRecap() {
     $('recapBody').innerHTML = `<div class="inset xs muted">No predictions logged for this day. The app records what the model says before every game while it's open on any of your devices (all sports in the background, about every 30 minutes) and posts the results here once games are final.${SERVER.on ? (PSYNC.loaded.has(RECAP.day) ? ' Your other devices had nothing for this day either.' : ' Checking your other devices…') : ' Shared history is off: the background job (GitHub deploy) isn\'t reachable, so this only shows what this device logged.'}</div>`;
     return;
   }
-  const legend = `<div class="xs muted">Colours show the model's opinion before the game: ${recapChip('win', 'green = higher model %')} ${recapChip('loss', 'red = lower model %')} · <b>✓</b> = what actually happened.</div>`;
+  const legend = `<div class="xs muted">${recapChip('win', 'green')} the side the model rated higher won · ${recapChip('loss', 'red')} the side the model rated lower won · grey = the other side, or not final yet.</div>`;
   const html = [...games.values()].sort((a, b) => new Date(a.start) - new Date(b.start)).map(g => {
     const recs = g.recs, by = m => recs.find(r => r.mkt === m && r.kind === 'game');
     const ml = by('ml'), sp = by('sp'), tot = by('tot');
