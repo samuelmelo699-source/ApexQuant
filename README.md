@@ -30,6 +30,10 @@ Deploy: drag this folder (or the zip) into https://app.netlify.com/drop.
 - Bet tracker: log bets, auto-capture closing prices ~15 min before start (app open) or by button, closing-line value, ROI, CSV export.
 - Everything you enter (ratings, picks, prices, bets, API key) stays in your browser's local storage.
 
+## College basketball (NCAAB)
+
+Every Division I game is included (ESPN `groups=50`). Team ratings start from last season's standings and update from this season's final scores. Opponents outside Division I are pooled into one team. The sim covers moneyline, spread and total. NCAAB player props show up on the Prop outliers tab, priced against the other books only, since there's no college player model. To save credits, the props scan covers the next 24 hours, and games without props cost nothing.
+
 ## Moneyline, spread & total outliers
 
 A separate section under Prop outliers, with tabs for NFL, CFB, NBA and NHL. It checks each book's moneyline, spread (puck line for NHL) and game total (over/under) against the no-vig consensus of the other books. Spreads and totals only compare books at the same number. It costs about 3 credits per sport, or nothing when the lines were downloaded in the last 30 minutes or come from the background job. Tracked bets are graded automatically.

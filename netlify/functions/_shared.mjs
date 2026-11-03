@@ -1,5 +1,5 @@
 // Shared helpers for the APEXQUANT background functions.
-export const SPORTS = { NFL: 'americanfootball_nfl', NBA: 'basketball_nba', NHL: 'icehockey_nhl', CFB: 'americanfootball_ncaaf' };
+export const SPORTS = { NFL: 'americanfootball_nfl', NBA: 'basketball_nba', NHL: 'icehockey_nhl', CFB: 'americanfootball_ncaaf', CBB: 'basketball_ncaab' };
 export const BOOKS = 'draftkings,fanduel,betmgm,williamhill_us,espnbet,fanatics,betrivers,bovada,betonlineag,pinnacle';
 export const PROP_MARKETS = {
   NBA: 'player_points,player_rebounds,player_assists,player_threes,player_points_rebounds_assists',

@@ -157,6 +157,7 @@
           <button type="button" data-sport="CFB">🏟️ CFB</button>
           <button type="button" data-sport="NBA">🏀 NBA</button>
           <button type="button" data-sport="NHL">🏒 NHL</button>
+          <button type="button" data-sport="CBB">🎓 NCAAB</button>
         </div>
       </div>
       <div class="row">
@@ -314,13 +315,13 @@
     <div class="card stack">
       <div class="row between">
         <div>
-          <h2 class="sm xb">📊 Team ratings · NBA, NFL, NHL &amp; CFB</h2>
+          <h2 class="sm xb">📊 Team ratings · NBA, NFL, NHL, CFB &amp; NCAAB</h2>
           <p class="note" style="margin:0">Each team's offense and defense sliders, computed from ESPN season stats: points scored and allowed per game against the league average, blended with last season and pulled toward average while samples are small. Refreshed automatically once a day.</p>
         </div>
       </div>
       <div class="rt-controls">
         <label class="rt-field"><span class="xs muted">Sport</span>
-          <select id="rtSport"><option value="NBA">🏀 NBA</option><option value="NFL">🏈 NFL</option><option value="NHL">🏒 NHL</option><option value="CFB">🎓 College football</option></select></label>
+          <select id="rtSport"><option value="NBA">🏀 NBA</option><option value="NFL">🏈 NFL</option><option value="NHL">🏒 NHL</option><option value="CFB">🎓 College football</option><option value="CBB">🎓 College basketball</option></select></label>
         <button type="button" id="rtRefresh">↻ Refresh</button>
         <button type="button" id="rtUse" class="btn-go">Use in Simulator</button>
       </div>
@@ -341,7 +342,7 @@
     <div class="card stack">
       <div class="row between">
         <div>
-          <h2 class="sm xb">🔥 Prop outliers · NBA, NFL &amp; NHL</h2>
+          <h2 class="sm xb">🔥 Prop outliers · NBA, NFL, NHL &amp; NCAAB</h2>
           <p class="note" style="margin:0">Every player prop from every book, priced against the other books' no-vig consensus. The best price at each line is ranked by expected value. Books are always shown. Each sport has its own tab: <b>Scan only spends credits on the tab you're on.</b></p>
         </div>
         <div class="row"><button type="button" id="olScanBtn" class="btn-go">Scan</button><button type="button" id="olRefreshBtn" title="Ignore cache and re-download (uses credits)">↻ Force refresh</button></div>
@@ -350,6 +351,7 @@
         <button type="button" data-oltab="NFL">🏈 NFL <span class="xs muted" data-olcount="NFL"></span></button>
         <button type="button" data-oltab="NBA">🏀 NBA <span class="xs muted" data-olcount="NBA"></span></button>
         <button type="button" data-oltab="NHL">🏒 NHL <span class="xs muted" data-olcount="NHL"></span></button>
+        <button type="button" data-oltab="CBB">🎓 NCAAB <span class="xs muted" data-olcount="CBB"></span></button>
       </nav>
       <div class="inset grid g4 xs">
         <div><label class="muted" for="olKey">The Odds API key</label><input id="olKey" type="password" autocomplete="off" placeholder="paste key" style="width:100%">
@@ -372,6 +374,10 @@
           <div><label class="row" style="margin-top:1.2rem"><input type="checkbox" id="olHideStale"> Hide stale prices</label></div>
           <div><label class="row" style="margin-top:1.2rem" title="Moneyline, spread and total for NFL, CFB, NBA and NHL from 10 books. About 3 credits per sport, refreshed at most every 30 min."><input type="checkbox" id="olGameLines"> Game lines from these books</label></div>
           <div><label class="muted" for="olMarket">Market</label><select id="olMarket" style="width:100%"></select></div>
+          <div><label class="muted" for="olSort">Sort by</label><select id="olSort" style="width:100%">
+            <option value="ev">EV % (best first)</option><option value="model">Model % (highest first)</option><option value="fair">Books' fair % (highest first)</option><option value="hit">Hit rate % (highest first)</option></select></div>
+          <div><label class="muted" for="olSide">Show</label><select id="olSide" style="width:100%">
+            <option value="all">Overs &amp; unders</option><option value="O">Overs only (incl. yes bets)</option><option value="U">Unders only</option></select></div>
           <div><label class="muted" for="olSearch">Search</label><input id="olSearch" type="text" placeholder="Player or team" style="width:100%"></div>
         </div>
       </div>
@@ -393,12 +399,15 @@
         <button type="button" data-glotab="CFB">🏟️ CFB</button>
         <button type="button" data-glotab="NBA">🏀 NBA</button>
         <button type="button" data-glotab="NHL">🏒 NHL</button>
+        <button type="button" data-glotab="CBB">🎓 NCAAB</button>
       </nav>
       <div class="row xs" style="gap:1rem;flex-wrap:wrap;align-items:flex-end">
         <label class="row"><input type="checkbox" id="gloML"> Moneyline</label>
         <label class="row"><input type="checkbox" id="gloSP"> <span id="gloSpLabel">Spread</span></label>
         <label class="row"><input type="checkbox" id="gloTOT"> <span id="gloTotLabel">Total (over/under)</span></label>
         <div><label class="muted" for="gloMinEV">Min EV %</label><input id="gloMinEV" type="number" step="0.5" class="mono" style="width:6rem"></div>
+        <div><label class="muted" for="gloSort">Sort by</label><select id="gloSort"><option value="ev">EV % (best first)</option><option value="model">Model % (highest first)</option><option value="fair">Books' fair % (highest first)</option></select></div>
+        <div><label class="muted" for="gloSide">Totals</label><select id="gloSide"><option value="all">Overs &amp; unders</option><option value="over">Overs only</option><option value="under">Unders only</option></select></div>
       </div>
       <div class="xs" id="gloStatus"></div>
       <div id="gloBody"></div>
@@ -417,7 +426,7 @@
       </div>
       <div class="inset grid g4 xs">
         <div><label class="muted" for="recapDay">Day</label><select id="recapDay" style="width:100%"></select></div>
-        <div><label class="muted" for="recapSport">Sport</label><select id="recapSport" style="width:100%"><option value="">All sports</option><option>NFL</option><option>NBA</option><option>NHL</option><option>CFB</option></select></div>
+        <div><label class="muted" for="recapSport">Sport</label><select id="recapSport" style="width:100%"><option value="">All sports</option><option>NFL</option><option>NBA</option><option>NHL</option><option>CFB</option><option value="CBB">NCAAB</option></select></div>
         <div><label class="muted" for="recapSearch">Player / team</label><input id="recapSearch" type="text" placeholder="Search props" style="width:100%"></div>
         <div><label class="row" style="margin-top:1.2rem"><input type="checkbox" id="recapProps"> Show player props</label></div>
       </div>
@@ -490,7 +499,7 @@
         <div class="row"><button type="button" id="rcGradeBtn" class="btn-go">Grade now</button><button type="button" id="rcCsvBtn">⬇ CSV</button></div>
       </div>
       <div class="inset grid g4 xs">
-        <div><label class="muted" for="rcSport">Sport</label><select id="rcSport" style="width:100%"><option value="">All sports</option><option>NFL</option><option>NBA</option><option>NHL</option><option>CFB</option></select></div>
+        <div><label class="muted" for="rcSport">Sport</label><select id="rcSport" style="width:100%"><option value="">All sports</option><option>NFL</option><option>NBA</option><option>NHL</option><option>CFB</option><option value="CBB">NCAAB</option></select></div>
         <div><label class="muted" for="rcDays">Period</label><select id="rcDays" style="width:100%"><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="0">All time</option></select></div>
         <div><label class="muted" for="rcEdge">Edge-bet test: min EV %</label><input id="rcEdge" type="number" step="1" min="0" class="mono"></div>
         <div class="xs muted" style="align-self:end">Games are graded automatically about 3 hours after they start, while the app is open.</div>
@@ -513,7 +522,7 @@
   </section>
 
   <p class="note center">Model output only. Not betting advice. Lines and injuries come from ESPN's public API and can lag the books.</p>
-  <p class="note center mono" id="buildTag">APEXQUANT version 2026-11-02b · model % uses no betting lines · stages 1-5: projections, defense vs position, auto-tuning, line movement, weather, lineups, referees, background job</p>
+  <p class="note center mono" id="buildTag">APEXQUANT version 2026-11-02c · NCAAB + sort · model % uses no betting lines · stages 1-5: projections, defense vs position, auto-tuning, line movement, weather, lineups, referees, background job</p>
 </main>
 
 <script>
@@ -532,19 +541,25 @@ const SPORTS = {
   NFL: { sport: 'football',   league: 'nfl',              calibTotal: 45,  hfa: 1.6, marginSD: 13.5, totalSD: 13.0, ptsPerRating: 0.25, shrinkG: 4,  kind: 'normal',  otWin: 3, otLose: 0, otK: 0.02, props: true,  maxSpread: 30 },
   CFB: { sport: 'football',   league: 'college-football', calibTotal: 52,  hfa: 2.5, marginSD: 16.0, totalSD: 15.5, ptsPerRating: 0.5, shrinkG: 4,  kind: 'normal',  otWin: 7, otLose: 3, otK: 0.02, props: false, maxSpread: 60 },
   NBA: { sport: 'basketball', league: 'nba',              calibTotal: 228, hfa: 2.3, marginSD: 12.5, totalSD: 18.0, ptsPerRating: 0.25, shrinkG: 15,  kind: 'normal',  otWin: 12, otLose: 9, otK: 0.015, props: true, maxSpread: 25 },
+  CBB: { sport: 'basketball', league: 'mens-college-basketball', calibTotal: 145, hfa: 3.0, marginSD: 11.0, totalSD: 16.0, ptsPerRating: 0.5, shrinkG: 5, kind: 'normal', otWin: 9, otLose: 7, otK: 0.015, props: false, maxSpread: 45 },
   NHL: { sport: 'hockey',     league: 'nhl',              calibTotal: 6.1, hfa: 0.2, marginSD: 0,    totalSD: 0,    ptsPerRating: 0.015, shrinkG: 20, kind: 'poisson', otWin: 1, otLose: 0, otK: 0.05, props: true,  maxSpread: 3.5, derivedSpread: 1.5 }
 };
 // Market names per sport (what the "spread" and "total" mean).
 const MARKET_NAMES = {
-  NFL: ['Spread', 'Total'], CFB: ['Spread', 'Total'], NBA: ['Spread', 'Total'],
+  NFL: ['Spread', 'Total'], CFB: ['Spread', 'Total'], NBA: ['Spread', 'Total'], CBB: ['Spread', 'Total'],
   NHL: ['Puck line', 'Total goals']
 };
-const UNIT = { NFL: 'pts', CFB: 'pts', NBA: 'pts', NHL: 'goals' };
+const UNIT = { NFL: 'pts', CFB: 'pts', NBA: 'pts', CBB: 'pts', NHL: 'goals' };
+// ESPN only returns every Division I / FBS game with a group filter
+const ESPN_GROUPS = { CFB: '&groups=80', CBB: '&groups=50' };
+const grp = sp => ESPN_GROUPS[sp] || '';
+const spLabel = sp => ({ CBB: 'NCAAB' })[sp] || sp;
 const urlFor = (key, path) => `${ESPN}${SPORTS[key].sport}/${SPORTS[key].league}/${path}`;
 
 const RATING_LABELS = {
   NFL: { o1: 'Pass offense', o2: 'Rush offense', d1: 'Pass defense', d2: 'Rush defense', sch: 'Scheme edge', i1: 'OL injuries', i2: 'Pass-D injuries', i3: 'Run-D injuries' },
   CFB: { o1: 'Pass offense', o2: 'Rush offense', d1: 'Pass defense', d2: 'Rush defense', sch: 'Scheme edge', i1: 'OL injuries', i2: 'Pass-D injuries', i3: 'Run-D injuries' },
+  CBB: { o1: 'Half-court offense', o2: 'Interior / transition O', d1: 'Perimeter defense', d2: 'Interior defense', sch: 'Matchup edge', i1: 'Offensive injuries', i2: 'Perimeter-D injuries', i3: 'Interior-D injuries' },
   NBA: { o1: 'Half-court offense', o2: 'Interior / transition O', d1: 'Perimeter defense', d2: 'Interior defense', sch: 'Matchup edge', i1: 'Offensive injuries', i2: 'Perimeter-D injuries', i3: 'Interior-D injuries' },
   NHL: { o1: 'Even-strength offense', o2: 'Power play', d1: 'Even-strength defense', d2: 'Penalty kill', sch: 'Goalie edge', i1: 'Forward injuries', i2: 'Defense injuries', i3: 'Goalie downgrade' }
 };
@@ -787,7 +802,7 @@ function parseOdds(sport, comp, awayAbbr, homeAbbr) {
 }
 
 // How far ahead to look for games. Football is weekly; NBA/NHL play daily.
-const LOOKAHEAD_DAYS = { NFL: 8, CFB: 7, NBA: 3, NHL: 3 };
+const LOOKAHEAD_DAYS = { NFL: 8, CFB: 7, NBA: 3, NHL: 3, CBB: 3 };
 const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 
 async function fetchSchedule(sport) {
@@ -796,7 +811,7 @@ async function fetchSchedule(sport) {
   // ESPN rejects date-range requests (?dates=A-B → HTTP 400) for team sports, so:
   //  • NBA/NHL: the default board + one request per day (yesterday … +lookahead)
   //  • NFL/CFB: the default board (this week) + next week (?week=N+1)
-  const extra = sport === 'CFB' ? '&groups=80' : '';           // FBS only
+  const extra = grp(sport);                                    // FBS only / Division I only
   const board = `${urlFor(sport, 'scoreboard')}?limit=400${extra}`;
   const first = await fetchJson(board);
   const ok = [first];
@@ -807,13 +822,13 @@ async function fetchSchedule(sport) {
   } else {
     const days = [];
     for (let i = -1; i <= LOOKAHEAD_DAYS[sport]; i++) { const d = new Date(); d.setDate(d.getDate() + i); days.push(ymd(d)); }
-    const res = await Promise.allSettled(days.map(d => fetchJson(`${urlFor(sport, 'scoreboard')}?dates=${d}&limit=400`, 12000, 0)));
+    const res = await Promise.allSettled(days.map(d => fetchJson(`${urlFor(sport, 'scoreboard')}?dates=${d}&limit=400${extra}`, 12000, 0)));
     for (const r of res) if (r.status === 'fulfilled') ok.push(r.value);
     // Nothing in the normal window (off-day, All-Star break…)? Walk forward day by day, up to 30 days, to the next games.
     const countEvents = ds => ds.reduce((a, d) => a + (d.events || []).length, 0);
     for (let i = LOOKAHEAD_DAYS[sport] + 1; !countEvents(ok) && i <= 30; i++) {
       const d = new Date(); d.setDate(d.getDate() + i);
-      try { ok.push(await fetchJson(`${urlFor(sport, 'scoreboard')}?dates=${ymd(d)}&limit=400`, 12000, 0)); } catch { break; }
+      try { ok.push(await fetchJson(`${urlFor(sport, 'scoreboard')}?dates=${ymd(d)}&limit=400${extra}`, 12000, 0)); } catch { break; }
     }
   }
   const byId = new Map();
@@ -1129,7 +1144,7 @@ function runGate(ev) {
   const hasLines = (ev.odds.spread !== null || (ev.odds.awayMl && ev.odds.homeMl)) && ev.odds.total !== null;
   checks.push({ ok: true, name: 'Game identity', detail: `${ev.awayAbbr} @ ${ev.homeAbbr} · ESPN event ${ev.eventId}` });
   checks.push({ ok: hasLines, name: 'Market lines', detail: hasLines ? `ESPN${ev.odds.provider ? ' / ' + ev.odds.provider : ''}${ev.odds.spreadDerived ? ' (±1.5 line inferred from moneyline, price not posted)' : ''}` : 'Missing ESPN lines — enter them above' });
-  if (!cfg.props) return { state: 'GAME', game: true, players: false, reason: 'College football: game markets only.', checks };
+  if (!cfg.props) return { state: 'GAME', game: true, players: false, reason: `${ev.sport === 'CBB' ? 'College basketball' : 'College football'}: game markets only (moneyline, spread, total).`, checks };
 
   const sides = ['away', 'home'].map(side => {
     const id = side === 'away' ? ev.awayTeamId : ev.homeTeamId;
@@ -1221,7 +1236,7 @@ function loadRatings() {
   } catch {}
 }
 // Sanity limits for a standings table: enough teams and a believable league scoring average.
-const RATING_SANITY = { NFL: [30, 14, 32], NBA: [28, 95, 130], NHL: [30, 2.2, 4.4], CFB: [100, 18, 42] };
+const RATING_SANITY = { NFL: [30, 14, 32], NBA: [28, 95, 130], NHL: [30, 2.2, 4.4], CFB: [100, 18, 42], CBB: [250, 60, 85] };
 const ratingsSane = (sport, t) => t && t.rows.size >= RATING_SANITY[sport][0] && t.lg >= RATING_SANITY[sport][1] && t.lg <= RATING_SANITY[sport][2];
 REG.autoMeta ||= {};
 
@@ -1239,7 +1254,7 @@ function saveResultsCache() { if (typeof RESTORING !== 'undefined' && RESTORING)
 const slimEvent = ev => { const c = ev.competitions?.[0]; return { id: ev.id, date: ev.date, season: { type: ev.season?.type }, status: { type: { completed: Boolean(c?.status?.type?.completed || ev.status?.type?.completed), state: c?.status?.type?.state || ev.status?.type?.state } },
   competitions: [{ neutralSite: Boolean(c?.neutralSite), competitors: (c?.competitors || []).map(x => ({ homeAway: x.homeAway, score: x.score?.value ?? x.score, team: { id: x.team?.id, abbreviation: x.team?.abbreviation, displayName: x.team?.displayName } })) }] }; };
 async function seasonResultEvents(sport) {
-  const cache = resultsCache(), extra = sport === 'CFB' ? '&groups=80' : '', now = new Date();
+  const cache = resultsCache(), extra = grp(sport), now = new Date();
   const jobs = [];   // [cacheKey, url]
   if (sport === 'NFL' || sport === 'CFB') {
     const b = await fetchJson(`${urlFor(sport, 'scoreboard')}?limit=400${extra}`, 12000, 0);
@@ -1249,7 +1264,7 @@ async function seasonResultEvents(sport) {
     if (st === 3) for (let w = 1; w <= wk; w++) jobs.push([`${sport}:${yr}:3:${w}`, `${urlFor(sport, 'scoreboard')}?week=${w}&seasontype=3&limit=400${extra}`]);
   } else {
     const yr = now.getMonth() < 8 ? now.getFullYear() - 1 : now.getFullYear();
-    for (let d = new Date(yr, 9, 1); d <= now; d = new Date(d.getTime() + 864e5)) jobs.push([`${sport}:d:${ymd(d)}`, `${urlFor(sport, 'scoreboard')}?dates=${ymd(d)}&limit=400`]);
+    for (let d = new Date(yr, sport === 'CBB' ? 10 : 9, 1); d <= now; d = new Date(d.getTime() + 864e5)) jobs.push([`${sport}:d:${ymd(d)}`, `${urlFor(sport, 'scoreboard')}?dates=${ymd(d)}&limit=400${extra}`]);
   }
   const out = [], queue = jobs.filter(([k]) => { if (cache[k]) { out.push(...cache[k]); return false; } return true; });
   let fetched = 0;
@@ -1280,26 +1295,29 @@ async function fetchResultsRatings(sport, prior = null) {
     for (const c of [h, a]) if (!teams.has(String(c.team.id))) teams.set(String(c.team.id), { abbr: c.team.abbreviation || '', name: c.team.displayName || c.team.name || c.team.abbreviation || c.team.id, n: 0, w: 0, l: 0, pf: 0, pa: 0 });
     games.push({ h: String(h.team.id), a: String(a.team.id), hs, as, neutral: Boolean(comp.neutralSite) });
   }
-  if (games.length < 20) { logReq(`${sport} results ratings`, 'none', `${games.length} final scores found`); return null; }
+  const priorOnly = games.length < 20;
+  if (priorOnly && !(prior?.size >= RATING_SANITY[sport][0])) { logReq(`${sport} results ratings`, 'none', `${games.length} final scores found`); return null; }
   for (const g of games) for (const [id, pf, pa] of [[g.h, g.hs, g.as], [g.a, g.as, g.hs]]) { const t = teams.get(id); t.n++; t.pf += pf; t.pa += pa; pf > pa ? t.w++ : t.l++; }
   // CFB: pool FCS opponents (only seen once or twice while FBS teams have many games)
   const pool = id => id;
   let poolOf = pool;
-  if (sport === 'CFB') {
+  if (sport === 'CBB' && prior?.size > 200) {
+    poolOf = id => prior.has(id) ? id : 'NON-D1';                         // opponents outside last season's Division I
+  } else if (sport === 'CFB') {
     const ns = [...teams.values()].map(t => t.n).sort((x, y) => x - y), p75 = ns[Math.floor(ns.length * 0.75)];
     const cut = Math.max(2, Math.round(0.4 * p75));
     const fcs = new Set([...teams.entries()].filter(([, t]) => t.n < cut).map(([id]) => id));
     poolOf = id => fcs.has(id) ? 'FCS' : id;
   }
-  const cap = { CFB: 28, NHL: 4, NFL: 28, NBA: 30 }[sport];
+  const cap = { CFB: 28, NHL: 4, NFL: 28, NBA: 30, CBB: 30 }[sport];
   const G = games.map(g => {
     let { hs, as } = g;
     if (hs - as > cap) hs = as + cap; else if (as - hs > cap) as = hs + cap;
     const hh = g.neutral ? 0 : cfg.hfa / 2;
     return { h: poolOf(g.h), a: poolOf(g.a), hs, as, hh };
   });
-  const mu = G.reduce((x, g) => x + g.hs + g.as, 0) / (2 * G.length);
-  const ids = [...new Set(G.flatMap(g => [g.h, g.a]))];
+  const mu = G.length >= 20 ? G.reduce((x, g) => x + g.hs + g.as, 0) / (2 * G.length) : prior.lg;
+  const ids = [...new Set([...G.flatMap(g => [g.h, g.a]), ...(prior ? [...prior.keys()] : [])])];
   const O = Object.fromEntries(ids.map(i => [i, 0])), D = Object.fromEntries(ids.map(i => [i, 0])), N = Object.fromEntries(ids.map(i => [i, 0]));
   for (const g of G) { N[g.h]++; N[g.a]++; }
   const lam = cfg.shrinkG;
@@ -1319,6 +1337,8 @@ async function fetchResultsRatings(sport, prior = null) {
     if (poolOf(id) !== id) continue;
     rows.set(id, { gp: t.n, pf: t.pf / t.n, pa: t.pa / t.n, abbr: t.abbr, name: t.name, rec: `${t.w}-${t.l}`, off: O[id], def: -D[id] });
   }
+  // teams with no final yet this season: last season's (half-weight) numbers
+  if (prior) for (const [id, p] of prior) if (!rows.has(id) && O[id] !== undefined) rows.set(id, { gp: 0, pf: mu + O[id], pa: mu - D[id], abbr: p.abbr || '', name: p.name || id, rec: '0-0', off: O[id], def: -D[id] });
   return { rows, lg: mu, games: games.length, prior: Boolean(prior?.size) };
 }
 function storeResultsRatings(sport, res) {
@@ -1346,7 +1366,7 @@ async function fetchSeasonRatings(sport) {
     const cur = perGameTable(await fetchJson(base, 10000));
     const season = cur?.season ?? [...REG.events.values()].find(e => e.sport === sport)?.season;
     const prev = season ? perGameTable(await fetchJson(`${base}?season=${season - 1}`, 10000)) : null;
-    if (prev && ratingsSane(sport, prev)) prior = new Map([...prev.rows].map(([id, t]) => [id, { o: 0.5 * (t.pf - prev.lg), d: 0.5 * (prev.lg - t.pa) }]));
+    if (prev && ratingsSane(sport, prev)) { prior = new Map([...prev.rows].map(([id, t]) => [id, { o: 0.5 * (t.pf - prev.lg), d: 0.5 * (prev.lg - t.pa), name: t.name, abbr: t.abbr }])); prior.lg = prev.lg; }
   } catch {}
   const res = await fetchResultsRatings(sport, prior).catch(() => null);
   const [minTeams, lo, hi] = RATING_SANITY[sport];
@@ -1503,7 +1523,7 @@ function teamInjuryImpact(sport, teamId) {
     off *= share; def *= share;
     if (off + def >= 0.05) res.list.push({ name: r.playerName, pos: r.group, status: effStatus(r), off, def });
   }
-  const cap = { NFL: 8, CFB: 8, NBA: 12, NHL: 0.6 }[sport] ?? 8;   // ceiling on total injury cost per side
+  const cap = { NFL: 8, CFB: 8, NBA: 12, CBB: 10, NHL: 0.6 }[sport] ?? 8;   // ceiling on total injury cost per side
   res.off = Math.min(cap, res.list.reduce((a, x) => a + x.off, 0));
   res.def = Math.min(cap, res.list.reduce((a, x) => a + x.def, 0));
   res.list.sort((a, b) => (b.off + b.def) - (a.off + a.def));
@@ -2852,7 +2872,7 @@ function runSelected() {
   const rs = REG.rosterSync[teamKey(ev.sport, ev.awayTeamId)];
   $('rosterSync').textContent = SPORTS[ev.sport].props ? timeStr(rs) : 'n/a';
   renderGate(sim.gate);
-  if (['props', 'td', 'td30'].includes(APP.tab) && OL_SPORTS[ev.sport] && hasOdds() && !AF.evAt?.[`${ev.sport}:${ev.eventId}`]) autoFillSoon();
+  if (['props', 'td', 'td30'].includes(APP.tab) && OL_SPORTS[ev.sport] && SPORTS[ev.sport].props && hasOdds() && !AF.evAt?.[`${ev.sport}:${ev.eventId}`]) autoFillSoon();
   renderSummary(sim);
   renderPlayerTabs(sim);
   renderRosterTab(sim);
@@ -3218,7 +3238,7 @@ function bindRatings() {
     APP.view = 'sim'; renderChrome(); syncSport();
   });
   // daily auto-update for all four leagues (checked at start-up and every hour)
-  const daily = async () => { if (await ensureDailyRatings(['NBA', 'NFL', 'NHL', 'CFB'])) { if (APP.view === 'ratings') renderRatings(); if (!STORE.anchor) { APP.simCache.clear(); renderSetup(); runSelected(); } } };
+  const daily = async () => { if (await ensureDailyRatings(['NBA', 'NFL', 'NHL', 'CFB', 'CBB'])) { if (APP.view === 'ratings') renderRatings(); if (!STORE.anchor) { APP.simCache.clear(); renderSetup(); runSelected(); } } };
   daily(); setInterval(daily, 3600e3);
 }
 
@@ -3234,7 +3254,7 @@ function bindRatings() {
    EV = P(win) × profit − P(lose).  Stake = quarter-Kelly, capped.
    ===================================================================== */
 const ODDS_API = 'https://api.the-odds-api.com/v4/sports/';
-const OL_SPORTS = { NFL: { key: 'americanfootball_nfl', days: 7 }, NBA: { key: 'basketball_nba', days: 2 }, NHL: { key: 'icehockey_nhl', days: 2 } };
+const OL_SPORTS = { NFL: { key: 'americanfootball_nfl', days: 7 }, NBA: { key: 'basketball_nba', days: 2 }, NHL: { key: 'icehockey_nhl', days: 2 }, CBB: { key: 'basketball_ncaab', days: 1 } };   // NCAAB: many games, so only the next 24 h (games without props cost no credits)
 const ONE_SIDED_HOLD = 1.07;
 const BOOK_WEIGHT = { pinnacle: 3, circasports: 3, betonlineag: 1.5, lowvig: 1.5 };
 const bookW = k => BOOK_WEIGHT[k] || 1;
@@ -3275,16 +3295,18 @@ const MKT_META_NHL = {
   player_assists:             { label: 'Assists',       dist: 'poisson' },
   player_blocked_shots:       { label: 'Blocked Shots', dist: 'poisson' }
 };
-const metaFor = (sport, base) => sport === 'NHL' ? MKT_META_NHL[base] : MKT_META[base];
+const metaFor = (sport, base) => sport === 'NHL' ? MKT_META_NHL[base] : sport === 'CBB' ? (MKT_META[base] && { ...MKT_META[base], model: undefined }) : MKT_META[base];   // no college player model: prices only
 const OL_MARKETS = {
   NHL: { main: ['player_points', 'player_shots_on_goal', 'player_total_saves', 'player_goal_scorer_anytime', 'player_assists'],
          alt: ['player_points_alternate', 'player_shots_on_goal_alternate', 'player_assists_alternate'] },
   NFL: { main: ['player_pass_yds', 'player_pass_tds', 'player_pass_completions', 'player_pass_attempts', 'player_pass_interceptions', 'player_rush_yds', 'player_rush_attempts', 'player_receptions', 'player_reception_yds', 'player_anytime_td'],
          alt: ['player_pass_yds_alternate', 'player_rush_yds_alternate', 'player_reception_yds_alternate', 'player_receptions_alternate', 'player_pass_tds_alternate'] },
+  CBB: { main: ['player_points', 'player_rebounds', 'player_assists', 'player_threes', 'player_points_rebounds_assists'],
+         alt: ['player_points_alternate', 'player_rebounds_alternate', 'player_assists_alternate', 'player_threes_alternate'] },
   NBA: { main: ['player_points', 'player_rebounds', 'player_assists', 'player_threes', 'player_points_rebounds_assists', 'player_blocks', 'player_steals', 'player_double_double'],
          alt: ['player_points_alternate', 'player_rebounds_alternate', 'player_assists_alternate', 'player_threes_alternate', 'player_points_rebounds_assists_alternate'] }
 };
-const OL_DEFAULTS = { key: '', sports: ['NFL', 'NBA'], alt: true, minHit: 0, books: 'sharp', min: -150, max: 1000, minEV: 5, minBooks: 3, ttl: 15, maxAge: 30, hideStale: true, q: '' };
+const OL_DEFAULTS = { key: '', sports: ['NFL', 'NBA'], alt: true, minHit: 0, sort: 'ev', side: 'all', books: 'sharp', min: -150, max: 1000, minEV: 5, minBooks: 3, ttl: 15, maxAge: 30, hideStale: true, q: '' };
 STORE.ol = { ...OL_DEFAULTS, ...(STORE.ol || {}) };
 if (!OL_SPORTS[STORE.ol.tab]) STORE.ol.tab = 'NBA';
 if (STORE.ol.regions && !STORE.ol.books) STORE.ol.books = STORE.ol.regions;
@@ -3485,7 +3507,7 @@ function fairAt(g, line, side, exclude = null) {
 }
 
 function computeOutliers() {
-  if (OL_SPORTS[APP.sport]) { try { refreshAllSims(); } catch {} }
+  if (OL_SPORTS[APP.sport] && SPORTS[APP.sport].props) { try { refreshAllSims(); } catch {} }
   const rows = [];
   const modelIndex = new Map();
   for (const sim of APP.simCache.values()) for (const r of sim.players || []) modelIndex.set(`${normName(r.name)}|${r.market}`, r);
@@ -3584,12 +3606,13 @@ function renderOutliersControls() {
   document.querySelectorAll('#olTabs [data-oltab]').forEach(b => b.classList.toggle('on', b.dataset.oltab === o.tab));
   for (const sp of Object.keys(OL_SPORTS)) {
     const el = document.querySelector(`[data-olcount="${sp}"]`); if (!el) continue;
-    const n = OL.rows.filter(r => r.sport === sp && r.price >= o.min && r.price <= o.max && r.ev * 100 >= o.minEV && r.nBooks >= o.minBooks && !(o.hideStale && r.stale) && olHitOK(r)).length;
+    const n = OL.rows.filter(r => r.sport === sp && r.price >= o.min && r.price <= o.max && r.ev * 100 >= o.minEV && r.nBooks >= o.minBooks && !(o.hideStale && r.stale) && olHitOK(r) && olSideOK(r)).length;
     el.textContent = OL.scanAt[sp] ? `· ${n} · ${new Date(OL.scanAt[sp]).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
   }
-  $('olScanBtn').textContent = `Scan ${o.tab}`;
+  $('olScanBtn').textContent = `Scan ${spLabel(o.tab)}`;
   $('olAlt').checked = o.alt; $('olBooks').value = o.books; $('olHideStale').checked = o.hideStale; $('olGameLines').checked = o.gameLines !== false;
   for (const [id, k] of [['olMin', 'min'], ['olMax', 'max'], ['olMinEV', 'minEV'], ['olMinBooks', 'minBooks'], ['olTtl', 'ttl'], ['olMaxAge', 'maxAge']]) $(id).value = o[k];
+  $('olSort').value = o.sort || 'ev'; $('olSide').value = o.side || 'all';
   $('olMinHit').value = o.minHit || 0; $('olMinHitVal').textContent = o.minHit ? `${o.minHit}%+` : 'off';
   $('olSearch').value = o.q;
   const per = Math.round(olMarketsFor(o.tab).length * regionCount());
@@ -3606,6 +3629,10 @@ function olHit(r) {
   const graded = xs.filter(v => r.side === 'Yes' || v !== r.line);      // whole-number lines: pushes don't count
   return graded.length ? { hits: graded.filter(win).length, n: graded.length, rate: graded.filter(win).length / graded.length } : null;
 }
+// sort key for outlier cards (missing values go last)
+const olSortVal = (r, k) => k === 'model' ? r.modelP : k === 'fair' ? (r.pWin / Math.max(1e-9, r.pWin + (r.pLose ?? 1 - r.pWin))) : k === 'hit' ? olHit(r)?.rate ?? null : r.ev;
+const olSortFn = k => (a, b) => { const x = olSortVal(a, k), y = olSortVal(b, k); return (y ?? -Infinity) - (x ?? -Infinity) || b.ev - a.ev; };
+const olSideOK = r => STORE.ol.side === 'all' || (STORE.ol.side === 'O' ? r.side !== 'U' : r.side === 'U');
 const olHitOK = r => !STORE.ol.minHit || ((h => h !== null && h.rate * 100 >= STORE.ol.minHit - 1e-9)(olHit(r)));
 function renderOutliers() {
   renderOutliersControls();
@@ -3615,22 +3642,22 @@ function renderOutliers() {
   const markets = [...new Map(OL.rows.filter(r => r.sport === o.tab).map(r => [r.market, r.mLabel])).entries()];
   mk.innerHTML = `<option value="">All markets</option>${markets.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}`;
   mk.value = markets.some(([k]) => k === prevM) ? prevM : '';
-  const base = OL.rows.filter(r => r.sport === o.tab && r.price >= o.min && r.price <= o.max && r.ev * 100 >= o.minEV && r.nBooks >= o.minBooks && olHitOK(r) &&
+  const base = OL.rows.filter(r => r.sport === o.tab && r.price >= o.min && r.price <= o.max && r.ev * 100 >= o.minEV && r.nBooks >= o.minBooks && olHitOK(r) && olSideOK(r) &&
       (!mk.value || r.market === mk.value) && (!q || normName(r.player).includes(q) || normName(r.label).includes(q)));
   const hiddenStale = o.hideStale ? base.filter(r => r.stale).length : 0;
-  const rows = base.filter(r => !(o.hideStale && r.stale)).sort((a, b) => b.ev - a.ev).slice(0, 250);
+  const rows = base.filter(r => !(o.hideStale && r.stale)).sort(olSortFn(o.sort || 'ev')).slice(0, 250);
   const errs = OL.errors.length ? `<div class="banner bad">${OL.errors.map(esc).join('<br>')}</div>` : '';
   const nG = [...OL.data.values()].filter(v => v.sport === o.tab).length;
   $('olStatus').innerHTML = nG
-    ? `${o.tab}: ${nG} games · ${OL.rows.filter(r => r.sport === o.tab).length} prices checked · <b class="green">${rows.length} outliers</b>${hiddenStale ? ` · ${hiddenStale} stale hidden` : ''}${o.minHit && o.tab !== APP.sport && !OL.rows.some(r => r.sport === o.tab && olHit(r)) ? `<div class="amber">Hit rates need ${o.tab} game logs: pick ${o.tab} at the top of the page once, then come back.</div>` : ''}`
-    : (hasOdds() ? `Press Scan ${o.tab} to load ${o.tab} props. Other tabs aren't touched.` : '<span class="amber">Add your Odds API key to start.</span>');
+    ? `${spLabel(o.tab)}: ${nG} games · ${OL.rows.filter(r => r.sport === o.tab).length} prices checked · <b class="green">${rows.length} outliers</b>${hiddenStale ? ` · ${hiddenStale} stale hidden` : ''}${o.minHit && o.tab !== APP.sport && !OL.rows.some(r => r.sport === o.tab && olHit(r)) ? `<div class="amber">Hit rates need ${o.tab} game logs: pick ${o.tab} at the top of the page once, then come back.</div>` : ''}`
+    : (hasOdds() ? `Press Scan ${spLabel(o.tab)} to load ${spLabel(o.tab)} props.${o.tab === 'CBB' ? ' NCAAB props are priced against the other books only (no college player model).' : ''} Other tabs aren't touched.` : '<span class="amber">Add your Odds API key to start.</span>');
   if (!rows.length) { $('olBody').innerHTML = errs + (nG ? '<div class="inset xs muted">No outliers match. Try a lower minimum EV or a wider odds range.</div>' : ''); return; }
   $('olBody').innerHTML = errs + `<div class="ol-grid">${rows.map(r => {
     const when = new Date(r.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     const sus = r.ev > 0.5;
     const age = r.ageMin === null ? '' : ` · updated ${r.ageMin < 1 ? '<1' : Math.round(r.ageMin)}m ago`;
     return `<div class="ol-card">
-      <div class="row between xs"><span><b>${{ NFL: '🏈', NBA: '🏀', NHL: '🏒' }[r.sport] || ''} ${esc(r.label)}</b> <span class="muted">${when}</span></span>
+      <div class="row between xs"><span><b>${{ NFL: '🏈', NBA: '🏀', NHL: '🏒', CBB: '🎓' }[r.sport] || ''} ${esc(r.label)}</b> <span class="muted">${when}</span></span>
         <span class="badge ${sus ? 's-questionable' : 's-verified'} mono">+${(r.ev * 100).toFixed(1)}%</span></div>
       <div class="row between" style="margin-top:.5rem">
         <div><div class="b">${esc(r.player)}</div><div class="xs muted">${r.side === 'Yes' ? '' : r.side + ' ' + r.line + ' '}${esc(r.mLabel)}${r.alt ? ' · alt' : ''}</div></div>
@@ -3808,6 +3835,8 @@ function bindOutliers() {
   for (const [id, k] of [['olMin', 'min'], ['olMax', 'max'], ['olMinEV', 'minEV'], ['olMinBooks', 'minBooks'], ['olTtl', 'ttl'], ['olMaxAge', 'maxAge']])
     $(id).addEventListener('change', e => { const v = num(e.target.value); if (v !== null) o()[k] = v; if (k === 'minBooks' || k === 'maxAge') computeOutliers(); saveRender(); });
   $('olSearch').addEventListener('input', e => { o().q = e.target.value; save(); renderOutliers(); });
+  $('olSort').addEventListener('change', e => { o().sort = e.target.value; save(); renderOutliers(); });
+  $('olSide').addEventListener('change', e => { o().side = e.target.value; save(); renderOutliers(); });
   $('olMinHit').addEventListener('input', e => { o().minHit = +e.target.value; save(); renderOutliers(); });
   $('olMarket').addEventListener('change', renderOutliers);
   $('olScanBtn').addEventListener('click', () => scanOutliers(false));
@@ -3842,7 +3871,7 @@ function bindOutliers() {
     // weather / officials / official lineups refresh every 30 min for the sport on screen
     if (!document.hidden && ['NBA', 'NFL', 'CFB'].includes(APP.sport)) ensurePregame(eventsForSport()).then(n => { if (n) { APP.simCache.clear(); runSelected(); } }).catch(() => {});
     // keep book prices fresh while a props table is open (each game re-checks only after the cache time, so this costs nothing extra)
-    if (hasOdds() && OL_SPORTS[APP.sport] && !document.hidden && (APP.view === 'props' || (APP.view === 'sim' && ['props', 'td', 'td30'].includes(APP.tab)))) autoFillSoon();
+    if (hasOdds() && OL_SPORTS[APP.sport] && SPORTS[APP.sport].props && !document.hidden && (APP.view === 'props' || (APP.view === 'sim' && ['props', 'td', 'td30'].includes(APP.tab)))) autoFillSoon();
   }, 60e3);
 }
 
@@ -3852,7 +3881,7 @@ function bindOutliers() {
    Main line = the line most books post. Price shown = best price at that line (book named).
    Fair = sharp-weighted median of each book's no-vig probability; the model anchors to it.
    ===================================================================== */
-const GL_KEYS = { NFL: 'americanfootball_nfl', CFB: 'americanfootball_ncaaf', NBA: 'basketball_nba', NHL: 'icehockey_nhl' };
+const GL_KEYS = { NFL: 'americanfootball_nfl', CFB: 'americanfootball_ncaaf', NBA: 'basketball_nba', NHL: 'icehockey_nhl', CBB: 'basketball_ncaab' };
 const GL_CACHE_KEY = 'apexquant.glcache';
 const GL = { data: {}, msg: {} };
 const glTtl = () => Math.max(30, STORE.ol.ttl || 15) * 60e3;
@@ -3975,7 +4004,7 @@ async function applyBookGameLines(sport, force = false) {
    Data = the 10-book game-line download (3 credits per sport; free when the background
    job's snapshot is fresh or the app already downloaded it in the last 30 min).
    ===================================================================== */
-STORE.glo = { tab: 'NBA', ml: true, sp: true, tot: true, minEV: 2, ...(STORE.glo || {}) };
+STORE.glo = { tab: 'NBA', ml: true, sp: true, tot: true, minEV: 2, sort: 'ev', side: 'all', ...(STORE.glo || {}) };
 const GLO = { rows: [], busy: false, msg: {}, err: '' };
 async function glFetch(sport, force = false) {
   let c = GL.data[sport];
@@ -4066,15 +4095,17 @@ function renderGLO() {
   if (!$('gloBody')) return;
   const g = STORE.glo, o = STORE.ol, sport = g.tab;
   document.querySelectorAll('#gloTabs [data-glotab]').forEach(b => b.classList.toggle('on', b.dataset.glotab === sport));
+  $('gloSort').value = g.sort || 'ev'; $('gloSide').value = g.side || 'all';
   $('gloML').checked = g.ml; $('gloSP').checked = g.sp; $('gloTOT').checked = g.tot; $('gloMinEV').value = g.minEV;
   $('gloSpLabel').textContent = MARKET_NAMES[sport][0]; $('gloTotLabel').textContent = `${MARKET_NAMES[sport][1]} (over/under)`;
-  $('gloScanBtn').textContent = GLO.busy ? 'Loading…' : `Load ${sport} lines`; $('gloScanBtn').disabled = GLO.busy;
+  $('gloScanBtn').textContent = GLO.busy ? 'Loading…' : `Load ${spLabel(sport)} lines`; $('gloScanBtn').disabled = GLO.busy;
   const m = GLO.msg[sport];
-  const base = GLO.rows.filter(r => r.sport === sport && (r.kind === 'Moneyline' ? g.ml : r.total ? g.tot : g.sp) && r.price >= o.min && r.price <= o.max && r.ev * 100 >= g.minEV);
+  const base = GLO.rows.filter(r => r.sport === sport && (r.kind === 'Moneyline' ? g.ml : r.total ? g.tot && (g.side === 'all' || r.side === g.side) : g.sp) && r.price >= o.min && r.price <= o.max && r.ev * 100 >= g.minEV);
   const hidden = o.hideStale ? base.filter(r => r.stale).length : 0;
-  const rows = base.filter(r => !(o.hideStale && r.stale)).sort((a, b) => b.ev - a.ev).slice(0, 120);
+  const sk = g.sort || 'ev', sv = r => sk === 'model' ? r.modelP : sk === 'fair' ? r.p : r.ev;
+  const rows = base.filter(r => !(o.hideStale && r.stale)).sort((a, b) => ((sv(b) ?? -Infinity) - (sv(a) ?? -Infinity)) || b.ev - a.ev).slice(0, 120);
   $('gloStatus').innerHTML = (GLO.err ? `<div class="banner bad">${esc(GLO.err)}</div>` : '') + (m
-    ? `${sport}: ${m.n} games · lines from ${m.server ? 'the background job' : 'the books'} at ${hhmm(m.t)}${m.server ? ' (no credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
+    ? `${spLabel(sport)}: ${m.n} games · lines from ${m.server ? 'the background job' : 'the books'} at ${hhmm(m.t)}${m.server ? ' (no credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
     : `<span class="muted">Press Load to price ${sport} moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals. About 3 credits, or free if the lines were downloaded in the last 30 min.</span>`);
   if (!m) { $('gloBody').innerHTML = ''; return; }
   if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline, spread or total outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
@@ -4082,7 +4113,7 @@ function renderGLO() {
     const when = new Date(r.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     const age = r.ageMin === null ? '' : ` · updated ${r.ageMin < 1 ? '<1' : Math.round(r.ageMin)}m ago`, sus = r.ev > 0.15;
     return `<div class="ol-card">
-      <div class="row between xs"><span><b>${{ NFL: '🏈', CFB: '🏟️', NBA: '🏀', NHL: '🏒' }[r.sport] || ''} ${esc(r.label)}</b> <span class="muted">${when}</span></span>
+      <div class="row between xs"><span><b>${{ NFL: '🏈', CFB: '🏟️', NBA: '🏀', NHL: '🏒', CBB: '🎓' }[r.sport] || ''} ${esc(r.label)}</b> <span class="muted">${when}</span></span>
         <span class="badge ${sus ? 's-questionable' : 's-verified'} mono">+${(r.ev * 100).toFixed(1)}%</span></div>
       <div class="row between" style="margin-top:.5rem">
         <div><div class="b">${esc(r.pick)}</div><div class="xs muted">${esc(r.kind)}</div></div>
@@ -4108,6 +4139,8 @@ function bindGLO() {
   $('gloRefreshBtn').addEventListener('click', () => gloScan(true));
   $('gloML').addEventListener('change', e => { STORE.glo.ml = e.target.checked; save(); renderGLO(); });
   $('gloSP').addEventListener('change', e => { STORE.glo.sp = e.target.checked; save(); renderGLO(); });
+  $('gloSort').addEventListener('change', e => { STORE.glo.sort = e.target.value; save(); renderGLO(); });
+  $('gloSide').addEventListener('change', e => { STORE.glo.side = e.target.value; save(); renderGLO(); });
   $('gloTOT').addEventListener('change', e => { STORE.glo.tot = e.target.checked; save(); renderGLO(); });
   $('gloMinEV').addEventListener('change', e => { const v = num(e.target.value); if (v !== null) STORE.glo.minEV = v; save(); renderGLO(); });
   $('gloBody').addEventListener('click', e => { const b = e.target.closest('[data-glotrack]'); if (b) trackGLO(b.dataset.glotrack); });
@@ -4391,7 +4424,7 @@ function parseFinal(sport, d) {
         const id = String(a.athlete?.id || ''); if (!id) continue;
         const P = (F.players[id] ||= { n: a.athlete.displayName || '', tm: tid, s: {} });
         const put = (k, v) => { if (v !== null && v !== undefined) P.s[k] = (P.s[k] || 0) + v; };
-        if (sport === 'NBA') {
+        if (sport === 'NBA' || sport === 'CBB') {
           const min = String(a.stats?.[col(['minutes'], ['MIN'])] ?? '');
           if (a.didNotPlay || !a.stats?.length || /^(0|--|)$/.test(min.trim())) { P.dnp = P.dnp ?? true; continue; }
           P.dnp = false;
@@ -4434,7 +4467,7 @@ async function getFinal(sport, eid) {
 
 /* ---------- what each market measures ---------- */
 const S = s => s;
-const STAT_OF = {
+const STAT_OF_ = {
   NBA: { player_points: s => s.pts, player_rebounds: s => s.reb, player_assists: s => s.ast, player_threes: s => s.tpm, player_blocks: s => s.blk, player_steals: s => s.stl,
          player_points_rebounds_assists: s => s.pts + s.reb + s.ast, player_points_rebounds: s => s.pts + s.reb, player_points_assists: s => s.pts + s.ast, player_rebounds_assists: s => s.reb + s.ast,
          player_double_double: s => ['pts', 'reb', 'ast', 'stl', 'blk'].filter(k => (s[k] || 0) >= 10).length >= 2 ? 1 : 0,
@@ -4448,6 +4481,7 @@ const STAT_OF = {
          player_assists: s => s.a ?? 0, player_blocked_shots: s => s.bs ?? 0,
          nhl_pts: s => (s.g ?? 0) + (s.a ?? 0), nhl_sog: s => s.sog ?? 0, nhl_saves: s => s.sv ?? 0, nhl_goal: s => (s.g ?? 0) > 0 ? 1 : 0 }
 };
+const STAT_OF = { ...STAT_OF_, CBB: STAT_OF_.NBA };
 const ouResult = (v, line, side) => v === line ? 'push' : ((v > line) === /^o/i.test(side) ? 'won' : 'lost');
 function findPlayer(F, name, id) {
   if (id && F.players[id]) return F.players[id];
@@ -4493,7 +4527,7 @@ async function espnIdForBet(b) {
   const sp = b.sport, t = new Date(b.start).getTime();
   const days = [...new Set([-1, 0].map(o => ymd(new Date(t + o * 864e5))))];
   const evs = [];
-  for (const d of days) { try { evs.push(...((await fetchJson(`${urlFor(sp, 'scoreboard')}?dates=${d}&limit=400${sp === 'CFB' ? '&groups=80' : ''}`, 10000, 0)).events || [])); } catch {} }
+  for (const d of days) { try { evs.push(...((await fetchJson(`${urlFor(sp, 'scoreboard')}?dates=${d}&limit=400${grp(sp)}`, 10000, 0)).events || [])); } catch {} }
   const list = [...new Map(evs.map(e => [String(e.id), e])).values()].map(e => { const c = e.competitions?.[0]?.competitors || []; return { id: String(e.id), commence_time: e.date, home_team: c.find(x => x.homeAway === 'home')?.team?.displayName || '', away_team: c.find(x => x.homeAway === 'away')?.team?.displayName || '' }; });
   let m = null;
   if (b.home && b.away) m = glMatch({ start: b.start, homeName: b.home, awayName: b.away }, list)?.oe;
@@ -4722,7 +4756,7 @@ async function recapLogAll() {
   RECAP.busy = true;
   try {
     const now = Date.now();
-    for (const sp of ['NFL', 'NBA', 'NHL', 'CFB']) {
+    for (const sp of ['NFL', 'NBA', 'NHL', 'CFB', 'CBB']) {
       const last = REG.schedSync[sp];
       if (!last || now - new Date(last).getTime() > 2 * 3600e3) { try { await fetchSchedule(sp); } catch { continue; } }
       for (const ev of REG.events.values()) {
@@ -4805,7 +4839,7 @@ function renderRecap() {
       const pr = recs.filter(r => r.kind === 'ou' || r.kind === 'yes').filter(r => !q || normName(r.player || '').includes(q) || normName(r.team || '').includes(q))
         .sort((a, b) => String(a.team).localeCompare(String(b.team)) || String(a.player).localeCompare(String(b.player)));
       if (pr.length) props = `<details class="rc-props" ${q ? 'open' : ''}><summary class="xs b">Player props (${pr.length}) · ${pr.filter(r => r.y === 1).length} over/yes · ${pr.filter(r => r.y === 0).length} under/no ▾</summary><div class="rc-plist">${pr.map(r => {
-        const lab = String(r.lab || '').replace(/^(NBA|NFL|NHL|CFB) /, ''), unit = WHY_UNIT[r.market] || '';
+        const lab = String(r.lab || '').replace(/^(NBA|NFL|NHL|CFB|CBB) /, ''), unit = WHY_UNIT[r.market] || '';
         const isYes = r.kind === 'yes';
         const what = isYes ? lab : `${r.line} ${unit}`;
         const pOver = r.p;
@@ -4828,7 +4862,7 @@ function renderRecap() {
     if (!lines.length && !props) return '';
     const when = new Date(g.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     return `<div class="ol-card stack" style="gap:.4rem">
-      <div class="row between xs"><b>${{ NFL: '🏈', CFB: '🎓', NBA: '🏀', NHL: '🏒' }[g.sport] || ''} ${esc(g.game)}</b><span class="muted">${score ? `final ${esc(away)} ${esc(score)} ${esc(home)}` : when}</span></div>
+      <div class="row between xs"><b>${{ NFL: '🏈', CFB: '🏈', NBA: '🏀', NHL: '🏒', CBB: '🏀' }[g.sport] || ''} ${esc(g.game)}</b><span class="muted">${score ? `final ${esc(away)} ${esc(score)} ${esc(home)}` : when}</span></div>
       ${lines.join('')}${props}
     </div>`;
   }).join('');
@@ -4886,7 +4920,7 @@ function playerIndex(groups) {
 }
 const AF_LADDER = { nba_20: 19.5, nba_30: 29.5 };   // "20+ / 30+ points" = Over 19.5 / 29.5 on the points ladder
 async function autoFillLines(sport, force = false) {
-  if (!hasOdds() || !OL_SPORTS[sport]) return 0;
+  if (!hasOdds() || !OL_SPORTS[sport] || !SPORTS[sport].props) return 0;
   if (AF.busy) { AF.pending = true; return 0; }
   const ttl = STORE.ol.ttl * 60e3, now = Date.now();
   AF.evAt ||= {}; AF.miss ||= {};
