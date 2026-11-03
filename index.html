@@ -3350,6 +3350,7 @@ async function serverRefresh() {
   try { SERVER.status = await serverJSON('/api/data/status'); } catch {}
   try { SERVER.alerts = await serverJSON('/api/data/alerts'); } catch {}
   const n = await serverCloses(); if (n) { save(); renderTracker(); }
+  await predsSyncRecent();
   renderServerPanel();
 }
 // tell the background job which games to capture closing prices for
@@ -4399,6 +4400,59 @@ function savePreds() {
   if (!PRED.dirty || RESTORING) return; PRED.dirty = false;
   if (PRED.list.length > 15000) { PRED.list.sort((a, b) => new Date(b.start) - new Date(a.start)); PRED.list.length = 15000; PRED.byK = new Map(PRED.list.map(r => [r.k, r])); }
   try { localStorage.setItem(PRED_KEY, JSON.stringify(PRED.list)); } catch { /* storage full: keep in memory */ }
+  if (SERVER?.on) { clearTimeout(PSYNC.timer); PSYNC.timer = setTimeout(predsPush, 3000); }   // share with your other devices
+}
+
+/* ---------- shared prediction log (Netlify): every device sends what it logged and reads the rest ---------- */
+var PSYNC = { index: {}, loaded: new Set(), busy: false, timer: null };
+const predSig = r => `${r.t}|${r.y === undefined ? 'u' : r.y}`;
+const nextDayKey = d => dayKey(new Date(Date.parse(d + 'T12:00:00') + 864e5).toISOString());
+async function predsPush() {
+  if (!SERVER.on || PSYNC.busy) return;
+  const cut = Date.now() - 60 * 864e5;
+  const todo = PRED.list.filter(r => r.k && r.start && r.su !== predSig(r) && Date.parse(r.start) > cut);
+  if (!todo.length) return;
+  PSYNC.busy = true;
+  try {
+    for (let i = 0; i < todo.length; i += 1500) {
+      const chunk = todo.slice(i, i + 1500);
+      const res = await fetch('/api/data/preds', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ preds: chunk.map(({ su, ...r }) => r) }) });
+      if (!res.ok) break;
+      for (const r of chunk) r.su = predSig(r);
+      PRED.dirty = true;
+    }
+  } catch {} finally { PSYNC.busy = false; }
+  if (PRED.dirty) { PRED.dirty = false; try { localStorage.setItem(PRED_KEY, JSON.stringify(PRED.list)); } catch {} }
+}
+function mergePredLocal(r) {
+  const old = PRED.byK.get(r.k);
+  if (!old) { r.su = predSig(r); PRED.list.push(r); PRED.byK.set(r.k, r); return true; }
+  const og = old.y !== undefined, rg = r.y !== undefined;
+  if (og && !rg) return false;
+  if ((rg && !og) || (!og && (r.t || 0) > (old.t || 0))) { Object.assign(old, r); old.su = predSig(old); return true; }
+  return false;
+}
+async function predsPull(days) {
+  if (!SERVER.on) return 0;
+  const want = [...new Set(days)].filter(d => d && !PSYNC.loaded.has(d)).slice(0, 10);
+  if (!want.length) return 0;
+  want.forEach(d => PSYNC.loaded.add(d));
+  try {
+    const recs = await serverJSON(`/api/data/preds?days=${want.join(',')}`);
+    let n = 0; for (const r of recs || []) if (r && r.k && mergePredLocal(r)) n++;
+    if (n) { PRED.dirty = true; savePreds(); }
+    return n;
+  } catch { want.forEach(d => PSYNC.loaded.delete(d)); return 0; }
+}
+async function predsSyncRecent() {
+  if (!SERVER.on) return;
+  try { PSYNC.index = await serverJSON('/api/data/predsindex') || {}; } catch {}
+  const today = etDayOf(Date.now()), yday = etDayOf(Date.now() - 864e5);
+  PSYNC.loaded.delete(today); PSYNC.loaded.delete(yday);        // today/yesterday can still change on other devices: refresh them
+  const n = await predsPull([etDayOf(Date.now() - 2 * 864e5), yday, today]);
+  predsPush();
+  if (APP.view === 'recap') renderRecap();
+  if (n && APP.view === 'tracker') renderReport?.();
 }
 
 /* ---------- ESPN final: scores, box lines, first scorers ---------- */
@@ -4781,12 +4835,13 @@ function renderRecap() {
   const o = STORE.recap;
   const today = dayKey(new Date().toISOString());
   const all = PRED.list.filter(r => r.start && dayKey(r.start) <= today);
-  const days = [...new Set(all.map(r => dayKey(r.start)))].sort().reverse().slice(0, 30);
+  const days = [...new Set([...all.map(r => dayKey(r.start)), ...Object.keys(PSYNC.index).filter(d => d <= today)])].sort().reverse().slice(0, 45);
   if (!RECAP.day || !days.includes(RECAP.day)) RECAP.day = days.find(d => all.some(r => dayKey(r.start) === d && (r.y === 0 || r.y === 1))) || days[0] || today;
   const fmtDay = d => new Date(d + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   $('recapDay').innerHTML = days.length ? days.map(d => `<option value="${d}">${d === today ? 'Today · ' : ''}${fmtDay(d)}</option>`).join('') : `<option value="${today}">Today</option>`;
   $('recapDay').value = RECAP.day; $('recapSport').value = o.sport; $('recapProps').checked = o.props; $('recapSearch').value = o.q;
   const q = normName(o.q);
+  if (SERVER.on && !PSYNC.loaded.has(RECAP.day)) predsPull([RECAP.day, nextDayKey(RECAP.day)]).then(() => { if (APP.view === 'recap') renderRecap(); });
   const rows = all.filter(r => dayKey(r.start) === RECAP.day && (!o.sport || r.sport === o.sport));
   // group by game / fight
   const games = new Map();
@@ -4798,7 +4853,7 @@ function renderRecap() {
   $('recapStatus').innerHTML = `${fmtDay(RECAP.day)} · ${games.size} game${games.size === 1 ? '' : 's'} · ${nGraded} results in${nPend ? ` · ${nPend} still pending (games not final yet)` : ''}${GR.busy ? ' · checking final scores…' : ''}`;
   $('recapTally').innerHTML = Object.keys(tally).length ? Object.entries(tally).map(([k, [w, l]]) => `<div class="inset"><div class="xs muted">${k}: model's pick</div><div class="lg b mono">${w}-${l} <span class="xs ${w / (w + l) >= 0.5 ? 'green' : 'rose'}">${pct(w / (w + l), 0)}</span></div></div>`).join('') : '';
   if (!games.size) {
-    $('recapBody').innerHTML = `<div class="inset xs muted">No predictions logged for this day. The app records what the model says before every game while it's open (all four sports in the background, about every 30 minutes) and posts the results here once games are final.</div>`;
+    $('recapBody').innerHTML = `<div class="inset xs muted">No predictions logged for this day. The app records what the model says before every game while it's open on any of your devices (all sports in the background, about every 30 minutes) and posts the results here once games are final.${SERVER.on ? (PSYNC.loaded.has(RECAP.day) ? ' Your other devices had nothing for this day either.' : ' Checking your other devices…') : ' Shared history is off: the background job (GitHub deploy) isn\'t reachable, so this only shows what this device logged.'}</div>`;
     return;
   }
   const html = [...games.values()].sort((a, b) => new Date(a.start) - new Date(b.start)).map(g => {
