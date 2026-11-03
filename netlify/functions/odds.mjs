@@ -7,6 +7,10 @@ export default async (req) => {
   if (!key) return json({ error: 'ODDS_API_KEY is not set' }, 500);
   if (!sameSite(req)) return json({ error: 'forbidden' }, 403);
   const path = url.pathname.replace(/^.*\/api\/odds\//, '');
+  if (path === 'sportslist') {                       // list of leagues the feed carries (free: costs no credits)
+    const r = await fetch(`https://api.the-odds-api.com/v4/sports/?all=true&apiKey=${key}`);
+    return new Response(await r.text(), { status: r.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+  }
   if (!/^[a-z0-9_]+(\/events(\/[a-z0-9]+\/odds)?|\/odds)?$/i.test(path)) return json({ error: 'bad path' }, 400);
   const qs = new URLSearchParams(url.search); qs.delete('apiKey'); qs.set('apiKey', key);
   const r = await fetch(`https://api.the-odds-api.com/v4/sports/${path}?${qs}`);

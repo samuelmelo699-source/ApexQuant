@@ -405,6 +405,7 @@
         <button type="button" data-glotab="NBA">🏀 NBA</button>
         <button type="button" data-glotab="NHL">🏒 NHL</button>
         <button type="button" data-glotab="CBB">🎓 NCAAB</button>
+        <button type="button" data-glotab="CBA">🇨🇳 CBA</button>
         <button type="button" data-glotab="SOC">⚽ Soccer</button>
         <select id="gloSocLeague" aria-label="Soccer league" class="hidden"></select>
       </nav>
@@ -577,8 +578,8 @@ for (const k of SOC_KEYS) { MARKET_NAMES[k] = ['Spread', 'Total goals']; UNIT[k]
 // ESPN only returns every Division I / FBS game with a group filter
 const ESPN_GROUPS = { CFB: '&groups=80', CBB: '&groups=50' };
 const grp = sp => ESPN_GROUPS[sp] || '';
-const spLabel = sp => ({ CBB: 'NCAAB' })[sp] || SPORTS[sp]?.name || sp;
-const spIcon = sp => ({ NFL: '🏈', CFB: '🏈', NBA: '🏀', CBB: '🎓', NHL: '🏒' })[sp] || (isSoc(sp) ? '⚽' : '');
+const spLabel = sp => ({ CBB: 'NCAAB', CBA: 'CBA' })[sp] || SPORTS[sp]?.name || sp;
+const spIcon = sp => ({ NFL: '🏈', CFB: '🏈', NBA: '🏀', CBB: '🎓', NHL: '🏒', CBA: '🇨🇳' })[sp] || (isSoc(sp) ? '⚽' : '');
 const urlFor = (key, path) => `${ESPN}${SPORTS[key].sport}/${SPORTS[key].league}/${path}`;
 
 const RATING_LABELS = {
@@ -3966,6 +3967,25 @@ function bindOutliers() {
    ===================================================================== */
 const GL_KEYS = { NFL: 'americanfootball_nfl', CFB: 'americanfootball_ncaaf', NBA: 'basketball_nba', NHL: 'icehockey_nhl', CBB: 'basketball_ncaab' };
 for (const k of SOC_KEYS) GL_KEYS[k] = SPORTS[k].oddsKey;
+// Books-only leagues (no ESPN data / model): moneyline + over/under from the odds feed. The feed's key is looked up
+// from its free league list, so the tab works as soon as the feed carries the league.
+const BOOKS_ONLY = { CBA: { name: 'Chinese Basketball Association', match: /(^|_)(cba|china)|chinese/i } };
+MARKET_NAMES.CBA = ['Spread', 'Total'];
+async function oddsSportsList() {
+  const url = SERVER.proxy ? '/api/odds/sportslist' : `${ODDS_API}?${new URLSearchParams({ all: 'true', apiKey: STORE.ol.key })}`;
+  const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(`league list HTTP ${r.status}`);
+  return r.json();
+}
+async function booksOnlyKey(sp) {
+  const c = STORE.boKeys?.[sp];
+  if (c && Date.now() - c.t < 12 * 3600e3) { if (c.key) GL_KEYS[sp] = c.key; return c; }
+  const list = await oddsSportsList();
+  const hit = list.find(x => BOOKS_ONLY[sp].match.test(`${x.key} ${x.title} ${x.description || ''}`) && /basketball/i.test(`${x.group} ${x.key}`));
+  const res = { t: Date.now(), key: hit?.key || null, active: hit ? hit.active !== false : false, title: hit?.title || '', bball: list.filter(x => /basketball/i.test(x.group || x.key)).map(x => x.title) };
+  (STORE.boKeys ||= {})[sp] = res; save();
+  if (res.key) GL_KEYS[sp] = res.key;
+  return res;
+}
 const GL_CACHE_KEY = 'apexquant.glcache';
 const GL = { data: {}, msg: {} };
 const glTtl = () => Math.max(30, STORE.ol.ttl || 15) * 60e3;
@@ -4105,7 +4125,7 @@ async function glFetch(sport, force = false) {
   const sv = await serverLines(sport);
   if (sv?.length) { const last = sv[sv.length - 1]; if (!c || last.t > c.t) c = GL.data[sport] = { t: last.t, list: last.list, server: true }; }
   if (hasOdds() && (force || !c || Date.now() - c.t > glTtl())) {
-    const list = await oddsGet(`${GL_KEYS[sport]}/odds`, { bookmakers: SHARP_SET, markets: isSoc(sport) ? 'h2h,totals' : 'h2h,spreads,totals', oddsFormat: 'american' });
+    const list = await oddsGet(`${GL_KEYS[sport]}/odds`, { bookmakers: SHARP_SET, markets: isSoc(sport) || BOOKS_ONLY[sport] ? 'h2h,totals' : 'h2h,spreads,totals', oddsFormat: 'american' });
     c = GL.data[sport] = { t: Date.now(), list };
   }
   if (c) try { const all = JSON.parse(localStorage.getItem(GL_CACHE_KEY) || '{}'); all[sport] = c; localStorage.setItem(GL_CACHE_KEY, JSON.stringify(all)); } catch {}
@@ -4173,6 +4193,11 @@ async function gloScan(force = false) {
   if (!hasOdds() && !SERVER.on) { GLO.err = 'Add your Odds API key (or turn on the background job) first.'; renderGLO(); return; }
   GLO.busy = true; GLO.err = ''; renderGLO();
   try {
+    if (BOOKS_ONLY[sport]) {
+      const k = await booksOnlyKey(sport);
+      if (!k.key) throw new Error(`The odds feed doesn't carry the ${BOOKS_ONLY[sport].name} right now, so there are no prices to compare. Basketball leagues it has: ${k.bball.join(', ') || 'none listed'}. The app checks again every 12 hours.`);
+      if (!k.active) throw new Error(`The odds feed lists ${k.title} but it's out of season right now (no games posted).`);
+    }
     const c = await glFetch(sport, force);
     if (!c) throw new Error('No game lines available yet.');
     GLO.rows = GLO.rows.filter(r => r.sport !== sport).concat(gloCompute(sport, c));
@@ -4182,7 +4207,7 @@ async function gloScan(force = false) {
 }
 function trackGLO(id) {
   const r = GLO.rows.find(x => x.id === id); if (!r || tracked(id)) return;
-  if (!r.reg) { GLO.err = 'Could not match this game to ESPN, so it can\'t be graded automatically. Track it by hand.'; renderGLO(); return; }
+  if (!r.reg) { GLO.err = BOOKS_ONLY[r.sport] ? `${BOOKS_ONLY[r.sport].name} games have no ESPN data, so they can't be tracked and graded automatically.` : 'Could not match this game to ESPN, so it can\'t be graded automatically. Track it by hand.'; renderGLO(); return; }
   const ev = r.reg, mkt = r.kind === 'Moneyline' ? 'Moneyline' : r.total ? MARKET_NAMES[r.sport][1] : MARKET_NAMES[r.sport][0];
   STORE.bets.unshift({ id: newBetId(), src: id, kind: 'game', sport: r.sport, eventId: ev.eventId, label: `${ev.awayAbbr} @ ${ev.homeAbbr}`, start: ev.start,
     pick: `${mkt}: ${r.pick}`, mkt, sideKey: r.espnSide, line: r.line, book: r.book, price: r.price, stake: r.stake || 0, pWin: r.p, pLose: 1 - r.p, ev: r.ev,
@@ -4196,7 +4221,7 @@ function renderGLO() {
   $('gloSocLeague').classList.toggle('hidden', !isSoc(sport)); if (isSoc(sport)) $('gloSocLeague').value = sport;
   $('gloSort').value = g.sort || 'ev'; $('gloSide').value = g.side || 'all';
   $('gloML').checked = g.ml; $('gloSP').checked = g.sp; $('gloTOT').checked = g.tot; $('gloMinEV').value = g.minEV;
-  $('gloSpLabel').textContent = MARKET_NAMES[sport][0]; $('gloSP').parentElement.style.display = isSoc(sport) ? 'none' : ''; $('gloTotLabel').textContent = `${MARKET_NAMES[sport][1]} (over/under)`;
+  $('gloSpLabel').textContent = MARKET_NAMES[sport][0]; $('gloSP').parentElement.style.display = isSoc(sport) || BOOKS_ONLY[sport] ? 'none' : ''; $('gloTotLabel').textContent = `${MARKET_NAMES[sport][1]} (over/under)`;
   $('gloScanBtn').textContent = GLO.busy ? 'Loading…' : `Load ${spLabel(sport)} lines`; $('gloScanBtn').disabled = GLO.busy;
   const m = GLO.msg[sport];
   const base = GLO.rows.filter(r => r.sport === sport && (r.kind === 'Moneyline' ? g.ml : r.total ? g.tot && (g.side === 'all' || r.side === g.side) : g.sp) && r.price >= o.min && r.price <= o.max && r.ev * 100 >= g.minEV);
@@ -4205,7 +4230,7 @@ function renderGLO() {
   const rows = base.filter(r => !(o.hideStale && r.stale)).sort((a, b) => ((sv(b) ?? -Infinity) - (sv(a) ?? -Infinity)) || b.ev - a.ev).slice(0, 120);
   $('gloStatus').innerHTML = (GLO.err ? `<div class="banner bad">${esc(GLO.err)}</div>` : '') + (m
     ? `${spLabel(sport)}: ${m.n} games · lines from ${m.server ? 'the background job' : 'the books'} at ${hhmm(m.t)}${m.server ? ' (no credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
-    : `<span class="muted">Press Load to price ${sport} moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals. About 3 credits, or free if the lines were downloaded in the last 30 min.</span>`);
+    : `<span class="muted">Press Load to price ${sport} ${isSoc(sport) || BOOKS_ONLY[sport] ? 'moneylines and over/unders' : `moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals`}. About 3 credits, or free if the lines were downloaded in the last 30 min.</span>`);
   if (!m) { $('gloBody').innerHTML = ''; return; }
   if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline, spread or total outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
   $('gloBody').innerHTML = `<div class="ol-grid">${rows.map(r => {
