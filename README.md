@@ -34,6 +34,15 @@ Deploy: drag this folder (or the zip) into https://app.netlify.com/drop.
 
 Every Division I game is included (ESPN `groups=50`). Team ratings start from last season's standings and update from this season's final scores. Opponents outside Division I are pooled into one team. The sim covers moneyline, spread and total. NCAAB player props show up on the Prop outliers tab, priced against the other books only, since there's no college player model. To save credits, the props scan covers the next 24 hours, and games without props cost nothing.
 
+## Soccer
+
+The ⚽ Soccer button has a league dropdown covering the Premier League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, Champions League, Europa League, Conference League, Championship, Eredivisie, Primeira Liga, Liga MX, Scottish Premiership and Brasileirão.
+- Ratings: domestic leagues use this season's league table (goals for/against) blended with last season. European cups use the cup table blended with each club's domestic rating, shifted by a fixed league-strength table.
+- The sim draws goals from a bivariate Poisson with a small shared component, so draws come out at realistic rates. Markets: 3-way moneyline (home/draw/away) and total goals. No spreads.
+- Game-line outliers price the 3-way moneyline and totals. Quarter-goal totals are skipped.
+- Player props (anytime goal, shots, shots on target, assists, to be carded) are priced against the other books only, with no player model. They're graded automatically from ESPN box scores.
+- The background job doesn't save soccer lines, to save credits.
+
 ## Moneyline, spread & total outliers
 
 A separate section under Prop outliers, with tabs for NFL, CFB, NBA and NHL. It checks each book's moneyline, spread (puck line for NHL) and game total (over/under) against the no-vig consensus of the other books. Spreads and totals only compare books at the same number. It costs about 3 credits per sport, or nothing when the lines were downloaded in the last 30 minutes or come from the background job. Tracked bets are graded automatically.

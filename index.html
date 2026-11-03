@@ -158,6 +158,8 @@
           <button type="button" data-sport="NBA">🏀 NBA</button>
           <button type="button" data-sport="NHL">🏒 NHL</button>
           <button type="button" data-sport="CBB">🎓 NCAAB</button>
+          <button type="button" data-sport="SOC">⚽ Soccer</button>
+          <select id="socLeague" aria-label="Soccer league" class="hidden"></select>
         </div>
       </div>
       <div class="row">
@@ -321,7 +323,7 @@
       </div>
       <div class="rt-controls">
         <label class="rt-field"><span class="xs muted">Sport</span>
-          <select id="rtSport"><option value="NBA">🏀 NBA</option><option value="NFL">🏈 NFL</option><option value="NHL">🏒 NHL</option><option value="CFB">🎓 College football</option><option value="CBB">🎓 College basketball</option></select></label>
+          <select id="rtSport"><option value="NBA">🏀 NBA</option><option value="NFL">🏈 NFL</option><option value="NHL">🏒 NHL</option><option value="CFB">🎓 College football</option><option value="CBB">🎓 College basketball</option><optgroup label="⚽ Soccer" data-soc></optgroup></select></label>
         <button type="button" id="rtRefresh">↻ Refresh</button>
         <button type="button" id="rtUse" class="btn-go">Use in Simulator</button>
       </div>
@@ -342,7 +344,7 @@
     <div class="card stack">
       <div class="row between">
         <div>
-          <h2 class="sm xb">🔥 Prop outliers · NBA, NFL, NHL &amp; NCAAB</h2>
+          <h2 class="sm xb">🔥 Prop outliers · NBA, NFL, NHL, NCAAB &amp; soccer</h2>
           <p class="note" style="margin:0">Every player prop from every book, priced against the other books' no-vig consensus. The best price at each line is ranked by expected value. Books are always shown. Each sport has its own tab: <b>Scan only spends credits on the tab you're on.</b></p>
         </div>
         <div class="row"><button type="button" id="olScanBtn" class="btn-go">Scan</button><button type="button" id="olRefreshBtn" title="Ignore cache and re-download (uses credits)">↻ Force refresh</button></div>
@@ -352,6 +354,8 @@
         <button type="button" data-oltab="NBA">🏀 NBA <span class="xs muted" data-olcount="NBA"></span></button>
         <button type="button" data-oltab="NHL">🏒 NHL <span class="xs muted" data-olcount="NHL"></span></button>
         <button type="button" data-oltab="CBB">🎓 NCAAB <span class="xs muted" data-olcount="CBB"></span></button>
+        <button type="button" data-oltab="SOC">⚽ Soccer</button>
+        <select id="olSocLeague" aria-label="Soccer league" class="hidden"></select>
       </nav>
       <div class="inset grid g4 xs">
         <div><label class="muted" for="olKey">The Odds API key</label><input id="olKey" type="password" autocomplete="off" placeholder="paste key" style="width:100%">
@@ -400,6 +404,8 @@
         <button type="button" data-glotab="NBA">🏀 NBA</button>
         <button type="button" data-glotab="NHL">🏒 NHL</button>
         <button type="button" data-glotab="CBB">🎓 NCAAB</button>
+        <button type="button" data-glotab="SOC">⚽ Soccer</button>
+        <select id="gloSocLeague" aria-label="Soccer league" class="hidden"></select>
       </nav>
       <div class="row xs" style="gap:1rem;flex-wrap:wrap;align-items:flex-end">
         <label class="row"><input type="checkbox" id="gloML"> Moneyline</label>
@@ -426,7 +432,7 @@
       </div>
       <div class="inset grid g4 xs">
         <div><label class="muted" for="recapDay">Day</label><select id="recapDay" style="width:100%"></select></div>
-        <div><label class="muted" for="recapSport">Sport</label><select id="recapSport" style="width:100%"><option value="">All sports</option><option>NFL</option><option>NBA</option><option>NHL</option><option>CFB</option><option value="CBB">NCAAB</option></select></div>
+        <div><label class="muted" for="recapSport">Sport</label><select id="recapSport" style="width:100%"><option value="">All sports</option><option>NFL</option><option>NBA</option><option>NHL</option><option>CFB</option><option value="CBB">NCAAB</option><optgroup label="⚽ Soccer" data-soc></optgroup></select></div>
         <div><label class="muted" for="recapSearch">Player / team</label><input id="recapSearch" type="text" placeholder="Search props" style="width:100%"></div>
         <div><label class="row" style="margin-top:1.2rem"><input type="checkbox" id="recapProps"> Show player props</label></div>
       </div>
@@ -499,7 +505,7 @@
         <div class="row"><button type="button" id="rcGradeBtn" class="btn-go">Grade now</button><button type="button" id="rcCsvBtn">⬇ CSV</button></div>
       </div>
       <div class="inset grid g4 xs">
-        <div><label class="muted" for="rcSport">Sport</label><select id="rcSport" style="width:100%"><option value="">All sports</option><option>NFL</option><option>NBA</option><option>NHL</option><option>CFB</option><option value="CBB">NCAAB</option></select></div>
+        <div><label class="muted" for="rcSport">Sport</label><select id="rcSport" style="width:100%"><option value="">All sports</option><option>NFL</option><option>NBA</option><option>NHL</option><option>CFB</option><option value="CBB">NCAAB</option><optgroup label="⚽ Soccer" data-soc></optgroup></select></div>
         <div><label class="muted" for="rcDays">Period</label><select id="rcDays" style="width:100%"><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="0">All time</option></select></div>
         <div><label class="muted" for="rcEdge">Edge-bet test: min EV %</label><input id="rcEdge" type="number" step="1" min="0" class="mono"></div>
         <div class="xs muted" style="align-self:end">Games are graded automatically about 3 hours after they start, while the app is open.</div>
@@ -522,7 +528,7 @@
   </section>
 
   <p class="note center">Model output only. Not betting advice. Lines and injuries come from ESPN's public API and can lag the books.</p>
-  <p class="note center mono" id="buildTag">APEXQUANT version 2026-11-02c · NCAAB + sort · model % uses no betting lines · stages 1-5: projections, defense vs position, auto-tuning, line movement, weather, lineups, referees, background job</p>
+  <p class="note center mono" id="buildTag">APEXQUANT version 2026-11-03 · soccer · NCAAB + sort · model % uses no betting lines · stages 1-5: projections, defense vs position, auto-tuning, line movement, weather, lineups, referees, background job</p>
 </main>
 
 <script>
@@ -544,16 +550,34 @@ const SPORTS = {
   CBB: { sport: 'basketball', league: 'mens-college-basketball', calibTotal: 145, hfa: 3.0, marginSD: 11.0, totalSD: 16.0, ptsPerRating: 0.5, shrinkG: 5, kind: 'normal', otWin: 9, otLose: 7, otK: 0.015, props: false, maxSpread: 45 },
   NHL: { sport: 'hockey',     league: 'nhl',              calibTotal: 6.1, hfa: 0.2, marginSD: 0,    totalSD: 0,    ptsPerRating: 0.015, shrinkG: 20, kind: 'poisson', otWin: 1, otLose: 0, otK: 0.05, props: true,  maxSpread: 3.5, derivedSpread: 1.5 }
 };
+// ⚽ SOCCER: every competition is its own sport key (own ratings, schedule and odds feed), shown under one Soccer button
+const SOCCER_LEAGUES = [
+  ['EPL', 'eng.1', 'soccer_epl', 'Premier League'], ['LALIGA', 'esp.1', 'soccer_spain_la_liga', 'La Liga'], ['SERIEA', 'ita.1', 'soccer_italy_serie_a', 'Serie A'],
+  ['BUNDES', 'ger.1', 'soccer_germany_bundesliga', 'Bundesliga'], ['LIGUE1', 'fra.1', 'soccer_france_ligue_one', 'Ligue 1'], ['MLS', 'usa.1', 'soccer_usa_mls', 'MLS'],
+  ['UCL', 'uefa.champions', 'soccer_uefa_champs_league', 'Champions League'], ['UEL', 'uefa.europa', 'soccer_uefa_europa_league', 'Europa League'],
+  ['UECL', 'uefa.europa.conf', 'soccer_uefa_europa_conference_league', 'Conference League'], ['CHAMP', 'eng.2', 'soccer_efl_champ', 'Championship'],
+  ['ERED', 'ned.1', 'soccer_netherlands_eredivisie', 'Eredivisie'], ['PRIM', 'por.1', 'soccer_portugal_primeira_liga', 'Primeira Liga'],
+  ['LIGAMX', 'mex.1', 'soccer_mexico_ligamx', 'Liga MX'], ['SPL', 'sco.1', 'soccer_spl', 'Scottish Prem'], ['BRA', 'bra.1', 'soccer_brazil_campeonato', 'Brasileirão']];
+const SOC_KEYS = SOCCER_LEAGUES.map(x => x[0]);
+const SOC_CUPS = new Set(['UCL', 'UEL', 'UECL']);
+// Cup games: each club's domestic rating is shifted by its league's strength (goal difference per game vs an
+// average European-cup opponent). A fixed football prior, not betting lines.
+const LEAGUE_STR = { EPL: 0.30, LALIGA: 0.20, SERIEA: 0.15, BUNDES: 0.15, LIGUE1: 0.05, PRIM: -0.05, ERED: -0.10, SPL: -0.35, CHAMP: -0.45 };
+for (const [k, league, oddsKey, name] of SOCCER_LEAGUES) SPORTS[k] = { sport: 'soccer', league, calibTotal: 2.7, hfa: SOC_CUPS.has(k) ? 0.25 : 0.3, marginSD: 0, totalSD: 0,
+  ptsPerRating: 0.025, shrinkG: 6, kind: 'poisson', draws: true, corr: 0.12, otWin: 0, otLose: 0, otK: 0, props: false, maxSpread: 3, soccer: true, oddsKey, name };
+const isSoc = sp => Boolean(SPORTS[sp]?.soccer);
 // Market names per sport (what the "spread" and "total" mean).
 const MARKET_NAMES = {
   NFL: ['Spread', 'Total'], CFB: ['Spread', 'Total'], NBA: ['Spread', 'Total'], CBB: ['Spread', 'Total'],
   NHL: ['Puck line', 'Total goals']
 };
 const UNIT = { NFL: 'pts', CFB: 'pts', NBA: 'pts', CBB: 'pts', NHL: 'goals' };
+for (const k of SOC_KEYS) { MARKET_NAMES[k] = ['Spread', 'Total goals']; UNIT[k] = 'goals'; }
 // ESPN only returns every Division I / FBS game with a group filter
 const ESPN_GROUPS = { CFB: '&groups=80', CBB: '&groups=50' };
 const grp = sp => ESPN_GROUPS[sp] || '';
-const spLabel = sp => ({ CBB: 'NCAAB' })[sp] || sp;
+const spLabel = sp => ({ CBB: 'NCAAB' })[sp] || SPORTS[sp]?.name || sp;
+const spIcon = sp => ({ NFL: '🏈', CFB: '🏈', NBA: '🏀', CBB: '🎓', NHL: '🏒' })[sp] || (isSoc(sp) ? '⚽' : '');
 const urlFor = (key, path) => `${ESPN}${SPORTS[key].sport}/${SPORTS[key].league}/${path}`;
 
 const RATING_LABELS = {
@@ -563,6 +587,7 @@ const RATING_LABELS = {
   NBA: { o1: 'Half-court offense', o2: 'Interior / transition O', d1: 'Perimeter defense', d2: 'Interior defense', sch: 'Matchup edge', i1: 'Offensive injuries', i2: 'Perimeter-D injuries', i3: 'Interior-D injuries' },
   NHL: { o1: 'Even-strength offense', o2: 'Power play', d1: 'Even-strength defense', d2: 'Penalty kill', sch: 'Goalie edge', i1: 'Forward injuries', i2: 'Defense injuries', i3: 'Goalie downgrade' }
 };
+for (const k of SOC_KEYS) RATING_LABELS[k] = { o1: 'Attack', o2: 'Set pieces / transition', d1: 'Defense', d2: 'Goalkeeping', sch: 'Tactical edge', i1: 'Attacking injuries', i2: 'Defensive injuries', i3: 'Goalkeeper downgrade' };
 // Which sliders/dropdowns each sport shows: [key, min, max, colour]
 const SLIDER_FIELDS = () => [['o1', 0, 100, 'green'], ['o2', 0, 100, 'green'], ['d1', 0, 100, 'sky'], ['d2', 0, 100, 'sky'], ['pace', 0, 100, 'amber'], ['sch', -25, 25, 'green']];
 const INJ_FIELDS = () => ['i1', 'i2', 'i3'];
@@ -803,6 +828,7 @@ function parseOdds(sport, comp, awayAbbr, homeAbbr) {
 
 // How far ahead to look for games. Football is weekly; NBA/NHL play daily.
 const LOOKAHEAD_DAYS = { NFL: 8, CFB: 7, NBA: 3, NHL: 3, CBB: 3 };
+for (const k of SOC_KEYS) LOOKAHEAD_DAYS[k] = 7;   // weekly fixtures
 const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 
 async function fetchSchedule(sport) {
@@ -1144,7 +1170,7 @@ function runGate(ev) {
   const hasLines = (ev.odds.spread !== null || (ev.odds.awayMl && ev.odds.homeMl)) && ev.odds.total !== null;
   checks.push({ ok: true, name: 'Game identity', detail: `${ev.awayAbbr} @ ${ev.homeAbbr} · ESPN event ${ev.eventId}` });
   checks.push({ ok: hasLines, name: 'Market lines', detail: hasLines ? `ESPN${ev.odds.provider ? ' / ' + ev.odds.provider : ''}${ev.odds.spreadDerived ? ' (±1.5 line inferred from moneyline, price not posted)' : ''}` : 'Missing ESPN lines — enter them above' });
-  if (!cfg.props) return { state: 'GAME', game: true, players: false, reason: `${ev.sport === 'CBB' ? 'College basketball' : 'College football'}: game markets only (moneyline, spread, total).`, checks };
+  if (!cfg.props) return { state: 'GAME', game: true, players: false, reason: isSoc(ev.sport) ? `${SPORTS[ev.sport].name}: game markets only (3-way moneyline, total goals). Player props are on the Prop outliers tab.` : `${ev.sport === 'CBB' ? 'College basketball' : 'College football'}: game markets only (moneyline, spread, total).`, checks };
 
   const sides = ['away', 'home'].map(side => {
     const id = side === 'away' ? ev.awayTeamId : ev.homeTeamId;
@@ -1237,6 +1263,7 @@ function loadRatings() {
 }
 // Sanity limits for a standings table: enough teams and a believable league scoring average.
 const RATING_SANITY = { NFL: [30, 14, 32], NBA: [28, 95, 130], NHL: [30, 2.2, 4.4], CFB: [100, 18, 42], CBB: [250, 60, 85] };
+for (const k of SOC_KEYS) RATING_SANITY[k] = [8, 0.7, 2.5];   // goals per team per game
 const ratingsSane = (sport, t) => t && t.rows.size >= RATING_SANITY[sport][0] && t.lg >= RATING_SANITY[sport][1] && t.lg <= RATING_SANITY[sport][2];
 REG.autoMeta ||= {};
 
@@ -1359,6 +1386,7 @@ function storeResultsRatings(sport, res) {
 // Every league: opponent-adjusted ratings from this season's final scores, with last season (ESPN standings,
 // half weight) as the starting point. Falls back to the plain standings method if results can't be loaded.
 async function fetchSeasonRatings(sport) {
+  if (isSoc(sport)) return soccerRatings(sport);
   const cfg = SPORTS[sport];
   const base = `https://site.api.espn.com/apis/v2/sports/${cfg.sport}/${cfg.league}/standings`;
   let prior = null;
@@ -1373,6 +1401,33 @@ async function fetchSeasonRatings(sport) {
   if (res && res.rows.size >= (sport === 'CFB' ? 60 : minTeams) && res.lg >= lo && res.lg <= hi) return storeResultsRatings(sport, res);
   return fetchStandingsRatings(sport);
 }
+// Soccer: league table goals for/against (blended with last season). Cups: the cup table blended with each
+// club's domestic rating shifted by LEAGUE_STR. Day-by-day result downloads would be ~100 requests per league.
+async function soccerRatings(sport) {
+  if (!SOC_CUPS.has(sport)) return fetchStandingsRatings(sport);
+  const doms = SOC_KEYS.filter(k => LEAGUE_STR[k] !== undefined);
+  await ensureDailyRatings(doms);
+  const tableOk = await fetchStandingsRatings(sport).catch(() => false);
+  const k = SPORTS[sport].ptsPerRating, g0 = 6, inCup = new Set([...REG.events.values()].filter(e => e.sport === sport).flatMap(e => [e.awayTeamId, e.homeTeamId]));
+  let n = 0;
+  for (const dom of doms) for (const [key, t] of Object.entries(REG.auto)) {
+    if (!key.startsWith(dom + ':')) continue;
+    const id = key.slice(dom.length + 1), ck = teamKey(sport, id), cur = REG.auto[ck];
+    if (!cur && !inCup.has(id)) continue;
+    const off = (t.offPts ?? 0) + LEAGUE_STR[dom] / 2, def = (t.defPts ?? 0) - LEAGUE_STR[dom] / 2;     // defPts > 0 = concedes more
+    const gp = cur && !cur.dom ? cur.gp || 0 : 0;
+    const offB = gp ? (gp * cur.offPts + g0 * off) / (gp + g0) : off, defB = gp ? (gp * cur.defPts + g0 * def) / (gp + g0) : def;
+    REG.auto[ck] = { ...(cur || { name: t.name, abbr: t.abbr, rec: '', pf: t.pf, pa: t.pa, lg: t.lg }), r: { o1: Math.round(clamp(50 + offB / k, 1, 99)), o2: Math.round(clamp(50 + offB / k, 1, 99)), d1: Math.round(clamp(50 - defB / k, 1, 99)), d2: Math.round(clamp(50 - defB / k, 1, 99)) },
+      offPts: offB, defPts: defB, gp: cur?.gp ?? 0, hasPrev: true, dom: SPORTS[dom].name };
+    n++;
+  }
+  if (!tableOk && !n) return false;
+  REG.leagueTotal[sport] ??= 2.9;
+  REG.autoAt[sport] = new Date().toISOString();
+  REG.autoMeta[sport] = `cup table${n ? ` + domestic ratings of ${n} clubs (league-strength adjusted)` : ''}`;
+  saveRatings();
+  return true;
+}
 async function fetchStandingsRatings(sport) {
   const cfg = SPORTS[sport];
   const base = `https://site.api.espn.com/apis/v2/sports/${cfg.sport}/${cfg.league}/standings`;
@@ -1380,6 +1435,7 @@ async function fetchStandingsRatings(sport) {
   try { cur = perGameTable(await fetchJson(base, 10000)); } catch {}
   if (!ratingsSane(sport, cur)) {
     // standings missing points (or nonsense values) → rate from this season's final scores instead
+    if (isSoc(sport)) { logReq(`${sport} season ratings`, 'none', 'league table not available yet'); return false; }
     logReq(`${sport} season ratings`, 'none', cur ? `standings looked wrong (${cur.rows.size} teams, avg ${cur.lg.toFixed(2)}) — using game results` : 'standings had no points for/against — using game results');
     const res = await fetchResultsRatings(sport).catch(() => null);
     if (res && res.rows.size >= RATING_SANITY[sport][0] * 0.6) return storeResultsRatings(sport, res);
@@ -1423,7 +1479,9 @@ async function ensureDailyRatings(sports, force = false) {
 function linesFor(ev) {
   const ov = STORE.lines[`${ev.sport}:${ev.eventId}`] || {};
   const pick = k => (k in ov ? ov[k] : ev.odds[k]);
-  return { spread: pick('spread'), total: pick('total'), awayMl: pick('awayMl'), homeMl: pick('homeMl'),
+  const soc = isSoc(ev.sport);
+  return { spread: soc ? null : pick('spread'), total: pick('total') ?? (soc ? 2.5 : null), awayMl: pick('awayMl'), homeMl: pick('homeMl'),
+           drawMl: ev.odds.drawMl ?? null, fair3: ev.odds.fair3 ?? null,
            awaySpreadOdds: ev.odds.awaySpreadOdds, homeSpreadOdds: ev.odds.homeSpreadOdds, overOdds: ev.odds.overOdds, underOdds: ev.odds.underOdds,
            fairHome: ('awayMl' in ov || 'homeMl' in ov) ? null : ev.odds.fairHome ?? null,
            fairCover: 'spread' in ov ? null : ev.odds.fairCover ?? null,
@@ -1579,13 +1637,16 @@ function simulate(ev, P) {
   const L = P.lines, hasSpread = L.spread !== null, hasTotal = L.total !== null;
   const pHomeOT = clamp(0.5 + pr.muMargin * cfg.otK, 0.25, 0.75);
   const lamA = Math.max(0.3, pr.muAway), lamH = Math.max(0.3, pr.muHome);
-  let sA = 0, sH = 0, homeW = 0, hCov = 0, aCov = 0, over = 0, under = 0;
+  let sA = 0, sH = 0, homeW = 0, awayW = 0, hCov = 0, aCov = 0, over = 0, under = 0;
   const totals = new Float64Array(n);
 
   for (let i = 0; i < n; i++) {
     let a, h;
     if (cfg.kind === 'poisson') {
-      a = poissonSample(lamA, rng); h = poissonSample(lamH, rng);
+      if (cfg.corr) {   // soccer: bivariate Poisson (shared component) — same expected goals, realistic draw rate
+        const c3 = Math.min(cfg.corr, lamA * 0.5, lamH * 0.5), sh = poissonSample(c3, rng);
+        a = poissonSample(lamA - c3, rng) + sh; h = poissonSample(lamH - c3, rng) + sh;
+      } else { a = poissonSample(lamA, rng); h = poissonSample(lamH, rng); }
     } else {
       const u1 = Math.max(1e-12, rng()), u2 = rng();
       const r = Math.sqrt(-2 * Math.log(u1));
@@ -1593,8 +1654,8 @@ function simulate(ev, P) {
       const t = pr.muTotal + r * Math.sin(2 * Math.PI * u2) * cfg.totalSD;
       h = Math.max(0, Math.round((t + m) / 2)); a = Math.max(0, Math.round((t - m) / 2));
     }
-    if (a === h) { if (rng() < pHomeOT) { h += cfg.otWin; a += cfg.otLose; } else { a += cfg.otWin; h += cfg.otLose; } }
-    sA += a; sH += h; if (h > a) homeW++;
+    if (a === h && !cfg.draws) { if (rng() < pHomeOT) { h += cfg.otWin; a += cfg.otLose; } else { a += cfg.otWin; h += cfg.otLose; } }   // soccer: a draw is a result
+    sA += a; sH += h; if (h > a) homeW++; else if (a > h) awayW++;
     if (hasSpread) { const d = h + L.spread - a; if (d > 0) hCov++; else if (d < 0) aCov++; }
     if (hasTotal) { const t = a + h; if (t > L.total) over++; else if (t < L.total) under++; }
     totals[i] = a + h;
@@ -1603,7 +1664,7 @@ function simulate(ev, P) {
   const res = {
     ev, P, pr, n,
     avgAway: sA / n, avgHome: sH / n, medTotal: totals[Math.floor(n / 2)],
-    pHome: homeW / n, pAway: 1 - homeW / n,
+    pHome: homeW / n, pAway: cfg.draws ? awayW / n : 1 - homeW / n, pDraw: cfg.draws ? 1 - (homeW + awayW) / n : 0,
     pHomeCover: hCov / n, pAwayCover: aCov / n, pSpreadPush: hasSpread ? 1 - (hCov + aCov) / n : 0,
     pOver: over / n, pUnder: under / n, pTotalPush: hasTotal ? 1 - (over + under) / n : 0,
     se: p => Math.sqrt(p * (1 - p) / n)
@@ -2116,7 +2177,8 @@ const currentEvent = () => { const evs = eventsForSport(); return evs.find(e => 
 function setStatus(t) { $('statusText').textContent = t; }
 
 function renderChrome() {
-  document.querySelectorAll('#sportPills button').forEach(b => b.classList.toggle('pill-on', b.dataset.sport === APP.sport));
+  document.querySelectorAll('#sportPills button').forEach(b => b.classList.toggle('pill-on', b.dataset.sport === APP.sport || (b.dataset.sport === 'SOC' && isSoc(APP.sport))));
+  $('socLeague').classList.toggle('hidden', !isSoc(APP.sport)); if (isSoc(APP.sport)) $('socLeague').value = APP.sport;
   document.querySelectorAll('#viewNav button').forEach(b => b.classList.toggle('on', b.dataset.view === APP.view));
   document.querySelectorAll('#simTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === APP.tab));
   setTimeout(syncNavSelects, 0);   // after the buttons' visibility is updated below
@@ -2242,7 +2304,8 @@ function renderSetup() {
   $('hfa').value = sportHfa(ev.sport);
   $('hfaVal').textContent = `+${sportHfa(ev.sport)}`;
   $('hfaWrap').style.opacity = STORE.anchor ? 0.5 : 1;
-  $('hfa').max = ev.sport === 'NHL' ? 1 : 5; $('hfa').step = ev.sport === 'NHL' ? 0.05 : 0.1;
+  const lowScoring = ev.sport === 'NHL' || isSoc(ev.sport);
+  $('hfa').max = lowScoring ? 1 : 5; $('hfa').step = lowScoring ? 0.05 : 0.1;
   for (const [id, k] of [['lnSpread', 'spread'], ['lnTotal', 'total'], ['lnAwayMl', 'awayMl'], ['lnHomeMl', 'homeMl']]) $(id).value = L[k] ?? '';
   $('lineSource').textContent = L.edited ? 'Using your edited lines.'
     : ev.odds.src === 'oddsapi' ? `Lines: consensus of ${ev.odds.nBooks} books via The Odds API (updated ${timeStr(new Date(ev.odds.t).toISOString())}). Prices shown are the best available, with the book named.${(() => { const e = lhCache()[`G:${ev.sport}:${ev.eventId}`]; if (!e || e.s.length < 2) return ''; const a = e.s[0], b = e.s[e.s.length - 1], parts = []; if (a.spread != null && b.spread != null && a.spread !== b.spread) parts.push(`spread ${ev.homeAbbr} ${signed(a.spread)} → ${signed(b.spread)}`); if (a.total != null && b.total != null && a.total !== b.total) parts.push(`total ${a.total} → ${b.total}`); if (a.fairHome != null && b.fairHome != null && Math.abs(b.fairHome - a.fairHome) >= 0.03) parts.push(`${ev.homeAbbr} win ${pct(a.fairHome, 0)} → ${pct(b.fairHome, 0)}`); return parts.length ? ` Line moves since ${hhmm(a.t)}: ${parts.join(' · ')}.` : ''; })()}`
@@ -2260,8 +2323,15 @@ function gameMarketRows(sim) {
   const rows = [];
   const nv = L.fairHome != null ? { a: 1 - L.fairHome, h: L.fairHome } : (L.awayMl && L.homeMl) ? (() => { const a = implied(L.awayMl), h = implied(L.homeMl); return { a: a / (a + h), h: h / (a + h) }; })() : null;
   const B = L.books || {};
+  if (SPORTS[ev.sport].draws) {   // soccer: 3-way moneyline (a bet on a team loses on a draw)
+    const f3 = L.fair3 || null;
+    rows.push({ mkt: 'Moneyline', pick: `${ev.awayAbbr} ML`, p: sim.pAway, q: 1 - sim.pAway, push: 0, odds: L.awayMl, nv: f3?.a, sideKey: 'away', line: null, book: B.awayMl });
+    rows.push({ mkt: 'Moneyline', pick: 'Draw', p: sim.pDraw, q: 1 - sim.pDraw, push: 0, odds: L.drawMl ?? null, nv: f3?.d, sideKey: 'draw', line: null, book: B.drawMl });
+    rows.push({ mkt: 'Moneyline', pick: `${ev.homeAbbr} ML`, p: sim.pHome, q: 1 - sim.pHome, push: 0, odds: L.homeMl, nv: f3?.h, sideKey: 'home', line: null, book: B.homeMl });
+  } else {
   rows.push({ mkt: 'Moneyline', pick: `${ev.awayAbbr} ML`, p: sim.pAway, q: sim.pHome, push: 0, odds: L.awayMl, nv: nv?.a, sideKey: 'away', line: null, book: B.awayMl });
   rows.push({ mkt: 'Moneyline', pick: `${ev.homeAbbr} ML`, p: sim.pHome, q: sim.pAway, push: 0, odds: L.homeMl, nv: nv?.h, sideKey: 'home', line: null, book: B.homeMl });
+  }
   if (L.spread !== null) {
     rows.push({ mkt: spName, pick: `${ev.awayAbbr} ${signed(-L.spread)}`, p: sim.pAwayCover, q: sim.pHomeCover, push: sim.pSpreadPush, odds: L.awaySpreadOdds, sideKey: 'away', line: -L.spread, nv: L.fairCover != null ? 1 - L.fairCover : undefined, book: B.awaySpreadOdds });
     rows.push({ mkt: spName, pick: `${ev.homeAbbr} ${signed(L.spread)}`, p: sim.pHomeCover, q: sim.pAwayCover, push: sim.pSpreadPush, odds: L.homeSpreadOdds, sideKey: 'home', line: L.spread, nv: L.fairCover ?? undefined, book: B.homeSpreadOdds });
@@ -3093,7 +3163,7 @@ async function syncSport(force = false, quiet = false) {
       if (APP.sport === sp && await ensureBoxes(eventsForSport()).catch(() => 0)) { APP.simCache.clear(); runSelected(); if (APP.view === 'props') { refreshAllSims(); renderPropFinder(); } }
     }).catch(() => {});
     updateGameCloses();
-    setStatus(n ? `ESPN live · ${n} ${APP.sport} games` : `ESPN returned no ${APP.sport} games in the next 30 days — details under Roster audit › ESPN request log`);
+    setStatus(n ? `ESPN live · ${n} ${spLabel(APP.sport)} games` : `ESPN returned no ${spLabel(APP.sport)} games in the next 30 days — details under Roster audit › ESPN request log`);
   } catch (e) {
     schedErr = e;
     setStatus(`Schedule fetch failed: ${e.message}`);
@@ -3238,7 +3308,7 @@ function bindRatings() {
     APP.view = 'sim'; renderChrome(); syncSport();
   });
   // daily auto-update for all four leagues (checked at start-up and every hour)
-  const daily = async () => { if (await ensureDailyRatings(['NBA', 'NFL', 'NHL', 'CFB', 'CBB'])) { if (APP.view === 'ratings') renderRatings(); if (!STORE.anchor) { APP.simCache.clear(); renderSetup(); runSelected(); } } };
+  const daily = async () => { if (await ensureDailyRatings(['NBA', 'NFL', 'NHL', 'CFB', 'CBB', ...(STORE.socUsed || [])])) { if (APP.view === 'ratings') renderRatings(); if (!STORE.anchor) { APP.simCache.clear(); renderSetup(); runSelected(); } } };
   daily(); setInterval(daily, 3600e3);
 }
 
@@ -3295,7 +3365,15 @@ const MKT_META_NHL = {
   player_assists:             { label: 'Assists',       dist: 'poisson' },
   player_blocked_shots:       { label: 'Blocked Shots', dist: 'poisson' }
 };
-const metaFor = (sport, base) => sport === 'NHL' ? MKT_META_NHL[base] : sport === 'CBB' ? (MKT_META[base] && { ...MKT_META[base], model: undefined }) : MKT_META[base];   // no college player model: prices only
+// Soccer player props: priced against the other books only (no player model)
+const MKT_META_SOC = {
+  player_goal_scorer_anytime: { label: 'Anytime Goal',    dist: 'binary' },
+  player_shots_on_target:     { label: 'Shots on Target', dist: 'poisson' },
+  player_shots:               { label: 'Shots',           dist: 'poisson' },
+  player_assists:             { label: 'Assists',         dist: 'poisson' },
+  player_to_receive_card:     { label: 'To Be Carded',    dist: 'binary' }
+};
+const metaFor = (sport, base) => isSoc(sport) ? MKT_META_SOC[base] : sport === 'NHL' ? MKT_META_NHL[base] : sport === 'CBB' ? (MKT_META[base] && { ...MKT_META[base], model: undefined }) : MKT_META[base];   // no college player model: prices only
 const OL_MARKETS = {
   NHL: { main: ['player_points', 'player_shots_on_goal', 'player_total_saves', 'player_goal_scorer_anytime', 'player_assists'],
          alt: ['player_points_alternate', 'player_shots_on_goal_alternate', 'player_assists_alternate'] },
@@ -3308,6 +3386,7 @@ const OL_MARKETS = {
 };
 const OL_DEFAULTS = { key: '', sports: ['NFL', 'NBA'], alt: true, minHit: 0, sort: 'ev', side: 'all', books: 'sharp', min: -150, max: 1000, minEV: 5, minBooks: 3, ttl: 15, maxAge: 30, hideStale: true, q: '' };
 STORE.ol = { ...OL_DEFAULTS, ...(STORE.ol || {}) };
+for (const k of SOC_KEYS) { OL_SPORTS[k] = { key: SPORTS[k].oddsKey, days: 4 }; OL_MARKETS[k] = { main: Object.keys(MKT_META_SOC), alt: [] }; }
 if (!OL_SPORTS[STORE.ol.tab]) STORE.ol.tab = 'NBA';
 if (STORE.ol.regions && !STORE.ol.books) STORE.ol.books = STORE.ol.regions;
 STORE.bank = { bankroll: 1000, kelly: 0.25, maxPct: 2, ...(STORE.bank || {}) };
@@ -3604,7 +3683,8 @@ function renderOutliersControls() {
   const o = STORE.ol;
   $('olKey').value = o.key;
   renderServerPanel();
-  document.querySelectorAll('#olTabs [data-oltab]').forEach(b => b.classList.toggle('on', b.dataset.oltab === o.tab));
+  document.querySelectorAll('#olTabs [data-oltab]').forEach(b => b.classList.toggle('on', b.dataset.oltab === o.tab || (b.dataset.oltab === 'SOC' && isSoc(o.tab))));
+  $('olSocLeague').classList.toggle('hidden', !isSoc(o.tab)); if (isSoc(o.tab)) $('olSocLeague').value = o.tab;
   for (const sp of Object.keys(OL_SPORTS)) {
     const el = document.querySelector(`[data-olcount="${sp}"]`); if (!el) continue;
     const n = OL.rows.filter(r => r.sport === sp && r.price >= o.min && r.price <= o.max && r.ev * 100 >= o.minEV && r.nBooks >= o.minBooks && !(o.hideStale && r.stale) && olHitOK(r) && olSideOK(r)).length;
@@ -3658,7 +3738,7 @@ function renderOutliers() {
     const sus = r.ev > 0.5;
     const age = r.ageMin === null ? '' : ` · updated ${r.ageMin < 1 ? '<1' : Math.round(r.ageMin)}m ago`;
     return `<div class="ol-card">
-      <div class="row between xs"><span><b>${{ NFL: '🏈', NBA: '🏀', NHL: '🏒', CBB: '🎓' }[r.sport] || ''} ${esc(r.label)}</b> <span class="muted">${when}</span></span>
+      <div class="row between xs"><span><b>${spIcon(r.sport)} ${esc(r.label)}</b> <span class="muted">${when}</span></span>
         <span class="badge ${sus ? 's-questionable' : 's-verified'} mono">+${(r.ev * 100).toFixed(1)}%</span></div>
       <div class="row between" style="margin-top:.5rem">
         <div><div class="b">${esc(r.player)}</div><div class="xs muted">${r.side === 'Yes' ? '' : r.side + ' ' + r.line + ' '}${esc(r.mLabel)}${r.alt ? ' · alt' : ''}</div></div>
@@ -3828,7 +3908,7 @@ function bindOutliers() {
   const o = () => STORE.ol;
   const saveRender = () => { save(); renderOutliers(); };
   $('olKey').addEventListener('change', e => { o().key = e.target.value.trim(); saveRender(); });
-  $('olTabs').addEventListener('click', e => { const b = e.target.closest('[data-oltab]'); if (!b || OL.busy) return; o().tab = b.dataset.oltab; OL.errors = []; $('olMarket').value = ''; saveRender(); });
+  $('olTabs').addEventListener('click', e => { const b = e.target.closest('[data-oltab]'); if (!b || OL.busy) return; o().tab = b.dataset.oltab === 'SOC' ? (o().socLeague || 'EPL') : b.dataset.oltab; OL.errors = []; $('olMarket').value = ''; saveRender(); });
   $('olAlt').addEventListener('change', e => { o().alt = e.target.checked; saveRender(); });
   $('olBooks').addEventListener('change', e => { o().books = e.target.value; saveRender(); });
   $('olHideStale').addEventListener('change', e => { o().hideStale = e.target.checked; saveRender(); });
@@ -3883,6 +3963,7 @@ function bindOutliers() {
    Fair = sharp-weighted median of each book's no-vig probability; the model anchors to it.
    ===================================================================== */
 const GL_KEYS = { NFL: 'americanfootball_nfl', CFB: 'americanfootball_ncaaf', NBA: 'basketball_nba', NHL: 'icehockey_nhl', CBB: 'basketball_ncaab' };
+for (const k of SOC_KEYS) GL_KEYS[k] = SPORTS[k].oddsKey;
 const GL_CACHE_KEY = 'apexquant.glcache';
 const GL = { data: {}, msg: {} };
 const glTtl = () => Math.max(30, STORE.ol.ttl || 15) * 60e3;
@@ -3922,7 +4003,7 @@ function glConsensus(sport, oe, swap) {
   for (const bm of oe.bookmakers || []) for (const m of bm.markets || []) {
     const get = n => (m.outcomes || []).find(x => x.name === n);
     const q = { book: bm.key, title: bm.title, w: bookW(bm.key) };
-    if (m.key === 'h2h') { const h = get(H), a = get(A); if (h && a) ml.push({ ...q, h: +h.price, a: +a.price }); }
+    if (m.key === 'h2h') { const h = get(H), a = get(A), d = get('Draw'); if (h && a) ml.push({ ...q, h: +h.price, a: +a.price, d: d ? +d.price : null }); }
     else if (m.key === 'spreads') { const h = get(H), a = get(A); if (h && a && Number.isFinite(+h.point) && Math.abs(+h.point) <= SPORTS[sport].maxSpread) sp.push({ ...q, line: +h.point, h: +h.price, a: +a.price }); }
     else if (m.key === 'totals') { const ov = get('Over'), un = get('Under'); if (ov && un && Number.isFinite(+ov.point)) tot.push({ ...q, line: +ov.point, h: +ov.price, a: +un.price }); }
   }
@@ -3937,7 +4018,16 @@ function glConsensus(sport, oe, swap) {
   };
   const out = { spread: null, total: null, awayMl: null, homeMl: null, awaySpreadOdds: null, homeSpreadOdds: null, overOdds: null, underOdds: null,
     src: 'oddsapi', provider: '', books: {}, t: Date.now(), nBooks: new Set([...ml, ...sp, ...tot].map(x => x.book)).size, fairHome: null, fairCover: null, fairOver: null };
-  if (ml.length) {
+  if (ml.length && SPORTS[sport].draws) {   // 3-way: no-vig each book over home/draw/away, sharp-weighted median, renormalised
+    const m3 = ml.filter(x => x.d);
+    if (m3.length) {
+      const nv = x => { const h = implied(x.h), a = implied(x.a), d = implied(x.d), t = h + a + d; return { h: h / t, a: a / t, d: d / t }; };
+      const med = k => wMedian(m3.map(x => nv(x)[k]), m3.map(x => x.w)), f = { h: med('h'), a: med('a'), d: med('d') }, t = f.h + f.a + f.d;
+      const ba = best(m3, 'a'), bh = best(m3, 'h'), bd = best(m3, 'd');
+      Object.assign(out, { awayMl: ba.a, homeMl: bh.h, drawMl: bd.d, fair3: { h: f.h / t, a: f.a / t, d: f.d / t }, fairHome: f.h / t });
+      out.books.awayMl = ba.title; out.books.homeMl = bh.title; out.books.drawMl = bd.title;
+    }
+  } else if (ml.length) {
     const ba = best(ml, 'a'), bh = best(ml, 'h');
     Object.assign(out, { awayMl: ba.a, homeMl: bh.h, fairHome: fair(ml) });
     out.books.awayMl = ba.title; out.books.homeMl = bh.title;
@@ -3968,7 +4058,7 @@ async function applyBookGameLines(sport, force = false) {
   }
   if (hasOdds() && (force || !c || Date.now() - c.t > glTtl())) {
     try {
-      const list = await oddsGet(`${GL_KEYS[sport]}/odds`, { bookmakers: SHARP_SET, markets: 'h2h,spreads,totals', oddsFormat: 'american' });
+      const list = await oddsGet(`${GL_KEYS[sport]}/odds`, { bookmakers: SHARP_SET, markets: isSoc(sport) ? 'h2h,totals' : 'h2h,spreads,totals', oddsFormat: 'american' });
       c = GL.data[sport] = { t: Date.now(), list };   // (newer than any server snapshot)
       try { const all = JSON.parse(localStorage.getItem(GL_CACHE_KEY) || '{}'); all[sport] = c; localStorage.setItem(GL_CACHE_KEY, JSON.stringify(all)); } catch {}
     } catch (e) { GL.msg[sport] = e.message; if (!c) return 0; }
@@ -4013,7 +4103,7 @@ async function glFetch(sport, force = false) {
   const sv = await serverLines(sport);
   if (sv?.length) { const last = sv[sv.length - 1]; if (!c || last.t > c.t) c = GL.data[sport] = { t: last.t, list: last.list, server: true }; }
   if (hasOdds() && (force || !c || Date.now() - c.t > glTtl())) {
-    const list = await oddsGet(`${GL_KEYS[sport]}/odds`, { bookmakers: SHARP_SET, markets: 'h2h,spreads,totals', oddsFormat: 'american' });
+    const list = await oddsGet(`${GL_KEYS[sport]}/odds`, { bookmakers: SHARP_SET, markets: isSoc(sport) ? 'h2h,totals' : 'h2h,spreads,totals', oddsFormat: 'american' });
     c = GL.data[sport] = { t: Date.now(), list };
   }
   if (c) try { const all = JSON.parse(localStorage.getItem(GL_CACHE_KEY) || '{}'); all[sport] = c; localStorage.setItem(GL_CACHE_KEY, JSON.stringify(all)); } catch {}
@@ -4038,32 +4128,37 @@ function gloCompute(sport, c) {
       const h = (mk.outcomes || []).find(x => x.name === H), a = (mk.outcomes || []).find(x => x.name === A);
       if (!h || !a) continue;
       const q = { book: bm.key, title: bm.title, h: +h.price, a: +a.price, upd: Date.parse(mk.last_update || bm.last_update) || null };
+      const dr = (mk.outcomes || []).find(x => /^draw$/i.test(x.name)); if (dr) q.d = +dr.price;
       if (mk.key === 'h2h') ml.push(q);
       if (mk.key === 'spreads' && Number.isFinite(+h.point) && +h.point === -a.point) sp.push({ ...q, pt: +h.point });
     }
-    const groups = [{ kind: 'Moneyline', pt: null, qs: ml }, ...[...new Set(sp.map(x => x.pt))].map(pt => ({ kind: MARKET_NAMES[sport][0], pt, qs: sp.filter(x => x.pt === pt) })),
+    const three = Boolean(SPORTS[sport]?.draws);
+    const groups = [{ kind: 'Moneyline', pt: null, qs: three ? ml.filter(q => q.d) : ml, three }, ...[...new Set(sp.map(x => x.pt))].map(pt => ({ kind: MARKET_NAMES[sport][0], pt, qs: sp.filter(x => x.pt === pt) })),
       ...[...new Set(tot.map(x => x.pt))].map(pt => ({ kind: MARKET_NAMES[sport][1], pt, qs: tot.filter(x => x.pt === pt), total: true }))];
-    for (const { kind, pt, qs, total } of groups) {
+    for (const { kind, pt, qs, total, three: is3 } of groups) {
       if (qs.length < minBooks) continue;
-      for (const side of total ? ['over', 'under'] : ['home', 'away']) {
-        const k = side === 'home' || side === 'over' ? 'h' : 'a', top = [...qs].sort((x, y) => payout(y[k]) - payout(x[k]))[0];
+      if (total && Math.abs(pt * 2 - Math.round(pt * 2)) > 1e-9) continue;          // quarter-goal (Asian) totals settle in halves: skip
+      for (const side of total ? ['over', 'under'] : is3 ? ['home', 'draw', 'away'] : ['home', 'away']) {
+        const k = side === 'draw' ? 'd' : side === 'home' || side === 'over' ? 'h' : 'a', top = [...qs].sort((x, y) => payout(y[k]) - payout(x[k]))[0];
         const others = qs.filter(q => q.book !== top.book);
-        const pH = wMedian(others.map(q => devig(q.h, q.a)), others.map(q => bookW(q.book)));
-        if (pH === null || !Number.isFinite(pH)) continue;
-        const p = k === 'h' ? pH : 1 - pH, price = top[k], ev = p * payout(price) - (1 - p);
-        const team = total ? '' : side === 'home' ? H : A, line = pt === null ? null : total ? pt : side === 'home' ? pt : -pt;
+        // 3-way (soccer): no-vig share of home/draw/away per book; 2-way: the usual pair
+        const share = q => { if (!is3) return k === 'h' ? devig(q.h, q.a) : 1 - devig(q.h, q.a); const h = implied(q.h), a = implied(q.a), d = implied(q.d); return { h, a, d }[k] / (h + a + d); };
+        const p = wMedian(others.map(share), others.map(q => bookW(q.book)));
+        if (p === null || !Number.isFinite(p)) continue;
+        const price = top[k], ev = p * payout(price) - (1 - p);
+        const team = total ? '' : side === 'draw' ? 'Draw' : side === 'home' ? H : A, line = pt === null ? null : total ? pt : side === 'home' ? pt : -pt;
         // model %: moneyline always; spread only when the model ran at this exact number
-        const espnSide = !reg ? null : total ? side : (side === 'home') !== swap ? 'home' : 'away';
+        const espnSide = !reg ? null : total || side === 'draw' ? side : (side === 'home') !== swap ? 'home' : 'away';
         let modelP = null;
         if (sim && espnSide) {
           if (total) { const Lt = sim.P?.lines?.total; if (Lt === pt) modelP = side === 'over' ? sim.pOver : sim.pUnder; }
-          else if (pt === null) modelP = espnSide === 'home' ? sim.pHome : sim.pAway;
+          else if (pt === null) modelP = espnSide === 'draw' ? sim.pDraw : espnSide === 'home' ? sim.pHome : sim.pAway;
           else { const Ls = sim.P?.lines?.spread, espnHomeLine = espnSide === 'home' ? line : -line; if (Ls !== null && Ls !== undefined && Ls === espnHomeLine) modelP = espnSide === 'home' ? sim.pHomeCover : sim.pAwayCover; }
         }
         const othersUpd = others.filter(q => q.upd).map(q => q.upd);
         const ageMin = top.upd ? (c.t - top.upd) / 60e3 : null, lagMin = top.upd && othersUpd.length ? (median(othersUpd) - top.upd) / 60e3 : null;
         rows.push({ id: `gl|${sport}|${oe.id}|${kind}|${side}|${line}`, sport, oeId: oe.id, reg, espnSide, label: `${shortTeam(A)} @ ${shortTeam(H)}`, start: oe.commence_time,
-          kind, team, side, line, pick: total ? `${side === 'over' ? 'Over' : 'Under'} ${pt}` : line === null ? `${team} ML` : `${team} ${signed(line, 1)}`, total: Boolean(total), price, book: top.title, bookKey: top.book, p, ev, nBooks: qs.length, modelP,
+          kind, team, side, line, pick: total ? `${side === 'over' ? 'Over' : 'Under'} ${pt}` : side === 'draw' ? 'Draw' : line === null ? `${team} ML` : `${team} ${signed(line, 1)}`, total: Boolean(total), price, book: top.title, bookKey: top.book, p, ev, nBooks: qs.length, modelP,
           prices: [...qs].sort((x, y) => payout(y[k]) - payout(x[k])).map(q => ({ book: q.title, price: q[k] })),
           ageMin, lagMin, stale: (lagMin !== null && lagMin > 10) || (ageMin !== null && ageMin > STORE.ol.maxAge), stake: kellyStake(p, 1 - p, price) });
       }
@@ -4095,10 +4190,11 @@ function trackGLO(id) {
 function renderGLO() {
   if (!$('gloBody')) return;
   const g = STORE.glo, o = STORE.ol, sport = g.tab;
-  document.querySelectorAll('#gloTabs [data-glotab]').forEach(b => b.classList.toggle('on', b.dataset.glotab === sport));
+  document.querySelectorAll('#gloTabs [data-glotab]').forEach(b => b.classList.toggle('on', b.dataset.glotab === sport || (b.dataset.glotab === 'SOC' && isSoc(sport))));
+  $('gloSocLeague').classList.toggle('hidden', !isSoc(sport)); if (isSoc(sport)) $('gloSocLeague').value = sport;
   $('gloSort').value = g.sort || 'ev'; $('gloSide').value = g.side || 'all';
   $('gloML').checked = g.ml; $('gloSP').checked = g.sp; $('gloTOT').checked = g.tot; $('gloMinEV').value = g.minEV;
-  $('gloSpLabel').textContent = MARKET_NAMES[sport][0]; $('gloTotLabel').textContent = `${MARKET_NAMES[sport][1]} (over/under)`;
+  $('gloSpLabel').textContent = MARKET_NAMES[sport][0]; $('gloSP').parentElement.style.display = isSoc(sport) ? 'none' : ''; $('gloTotLabel').textContent = `${MARKET_NAMES[sport][1]} (over/under)`;
   $('gloScanBtn').textContent = GLO.busy ? 'Loading…' : `Load ${spLabel(sport)} lines`; $('gloScanBtn').disabled = GLO.busy;
   const m = GLO.msg[sport];
   const base = GLO.rows.filter(r => r.sport === sport && (r.kind === 'Moneyline' ? g.ml : r.total ? g.tot && (g.side === 'all' || r.side === g.side) : g.sp) && r.price >= o.min && r.price <= o.max && r.ev * 100 >= g.minEV);
@@ -4114,7 +4210,7 @@ function renderGLO() {
     const when = new Date(r.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     const age = r.ageMin === null ? '' : ` · updated ${r.ageMin < 1 ? '<1' : Math.round(r.ageMin)}m ago`, sus = r.ev > 0.15;
     return `<div class="ol-card">
-      <div class="row between xs"><span><b>${{ NFL: '🏈', CFB: '🏟️', NBA: '🏀', NHL: '🏒', CBB: '🎓' }[r.sport] || ''} ${esc(r.label)}</b> <span class="muted">${when}</span></span>
+      <div class="row between xs"><span><b>${spIcon(r.sport)} ${esc(r.label)}</b> <span class="muted">${when}</span></span>
         <span class="badge ${sus ? 's-questionable' : 's-verified'} mono">+${(r.ev * 100).toFixed(1)}%</span></div>
       <div class="row between" style="margin-top:.5rem">
         <div><div class="b">${esc(r.pick)}</div><div class="xs muted">${esc(r.kind)}</div></div>
@@ -4135,7 +4231,7 @@ function renderGLO() {
   }).join('')}</div>`;
 }
 function bindGLO() {
-  $('gloTabs').addEventListener('click', e => { const b = e.target.closest('[data-glotab]'); if (!b || GLO.busy) return; STORE.glo.tab = b.dataset.glotab; GLO.err = ''; save(); renderGLO(); });
+  $('gloTabs').addEventListener('click', e => { const b = e.target.closest('[data-glotab]'); if (!b || GLO.busy) return; STORE.glo.tab = b.dataset.glotab === 'SOC' ? (STORE.glo.socLeague || 'EPL') : b.dataset.glotab; GLO.err = ''; save(); renderGLO(); });
   $('gloScanBtn').addEventListener('click', () => gloScan(false));
   $('gloRefreshBtn').addEventListener('click', () => gloScan(true));
   $('gloML').addEventListener('change', e => { STORE.glo.ml = e.target.checked; save(); renderGLO(); });
@@ -4505,6 +4601,15 @@ function parseFinal(sport, d) {
     if (sp) { const m = String(sp.text || '').match(/^(.+?)\s+\d+\s+(Yd|Yard)/i); F.firstTD = { name: m ? m[1].trim() : '', id: String(sp.participants?.[0]?.athlete?.id || '') }; }
     else if (F.done && (d.scoringPlays || []).length >= 0 && d.scoringPlays) F.firstTD = { none: true };
   }
+  if (isSoc(sport)) for (const side of d.rosters || []) {     // soccer box score: per-player stats in rosters
+    const tid = String(side.team?.id || '');
+    for (const pl of side.roster || []) {
+      const id = String(pl.athlete?.id || ''); if (!id) continue;
+      const st = Object.fromEntries((pl.stats || []).map(x => [x.name, num(x.value)]));
+      F.players[id] = { n: pl.athlete.displayName || '', tm: tid, dnp: !(st.appearances > 0 || pl.starter || pl.subbedIn),
+        s: { goals: st.totalGoals ?? 0, ast: st.goalAssists ?? 0, sot: st.shotsOnTarget ?? 0, shots: st.totalShots ?? 0, cards: (st.yellowCards ?? 0) + (st.redCards ?? 0) } };
+    }
+  }
   if (sport === 'NBA' && Array.isArray(d.plays) && d.plays.length) {
     const fb = d.plays.find(p => p.scoringPlay && !/free throw/i.test(`${p.type?.text || ''} ${p.text || ''}`));
     if (fb) { const id = String(fb.participants?.[0]?.athlete?.id || ''); F.firstBasket = { id, name: F.players[id]?.n || String(fb.text || '').split(/ makes /i)[0] }; }
@@ -4536,6 +4641,7 @@ const STAT_OF_ = {
          nhl_pts: s => (s.g ?? 0) + (s.a ?? 0), nhl_sog: s => s.sog ?? 0, nhl_saves: s => s.sv ?? 0, nhl_goal: s => (s.g ?? 0) > 0 ? 1 : 0 }
 };
 const STAT_OF = { ...STAT_OF_, CBB: STAT_OF_.NBA };
+for (const k of SOC_KEYS) STAT_OF[k] = { player_goal_scorer_anytime: s => s.goals > 0 ? 1 : 0, player_shots_on_target: s => s.sot, player_shots: s => s.shots, player_assists: s => s.ast, player_to_receive_card: s => s.cards > 0 ? 1 : 0 };
 const ouResult = (v, line, side) => v === line ? 'push' : ((v > line) === /^o/i.test(side) ? 'won' : 'lost');
 function findPlayer(F, name, id) {
   if (id && F.players[id]) return F.players[id];
@@ -4548,7 +4654,9 @@ function gradeOne(sport, F, x) {
   const h = F.home?.score, a = F.away?.score;
   if (x.kind === 'game') {
     if (h === null || a === null) return { pending: 'no final score' };
-    if (/moneyline|^ml$/i.test(x.mkt)) { if (h === a) return { status: 'push', actual: `${a}-${h}` }; return { status: (x.sideKey === 'home') === (h > a) ? 'won' : 'lost', actual: `${a}-${h}` }; }
+    if (/moneyline|^ml$/i.test(x.mkt)) {
+      if (SPORTS[sport]?.draws) return { status: (x.sideKey === 'draw' ? h === a : h !== a && (x.sideKey === 'home') === (h > a)) ? 'won' : 'lost', actual: `${a}-${h}` };
+      if (h === a) return { status: 'push', actual: `${a}-${h}` }; return { status: (x.sideKey === 'home') === (h > a) ? 'won' : 'lost', actual: `${a}-${h}` }; }
     if (/total|^tot$/i.test(x.mkt)) return { status: ouResult(h + a, x.line, x.sideKey), actual: h + a };
     const m = (x.sideKey === 'home' ? h - a : a - h) + x.line;            // spread / puck line
     return { status: m === 0 ? 'push' : m > 0 ? 'won' : 'lost', actual: `${a}-${h}` };
@@ -4609,7 +4717,7 @@ function logPredictions(sims = APP.simCache.values()) {
     const real = !(ev.odds.assumed && !L.edited);
     const snap = r => ({ o1: r.o1, o2: r.o2, d1: r.d1, d2: r.d2, pace: r.pace, sch: r.sch, i1: r.i1, i2: r.i2, i3: r.i3 });
     const sl = { mode: sim.P.anchor ? 'anchored' : 'stats', a: snap(sim.P.ratings.away), h: snap(sim.P.ratings.home), hfa: sim.P.hfa, inj: Boolean(sim.P.autoInj) };
-    if (mlH && mlA) { const pr = mlH.odds && mlA.odds; up({ k: `${ev.sport}:${ev.eventId}:ml`, kind: 'game', mkt: 'ml', lab: 'Moneyline', sideKey: 'home', line: null, p: mlH.pNoPush, pm: pr ? mlH.nv ?? null : null, oA: pr ? mlH.odds : null, oB: pr ? mlA.odds : null, sl, proj: [+sim.avgAway.toFixed(1), +sim.avgHome.toFixed(1)] }); }
+    if (mlH && mlA) { const pr = mlH.odds && mlA.odds; up({ k: `${ev.sport}:${ev.eventId}:ml`, kind: 'game', mkt: 'ml', lab: 'Moneyline', sideKey: 'home', line: null, p: mlH.pNoPush, ...(SPORTS[ev.sport].draws ? { pd: +sim.pDraw.toFixed(4) } : {}), pm: pr ? mlH.nv ?? null : null, oA: pr ? mlH.odds : null, oB: pr ? mlA.odds : null, sl, proj: [+sim.avgAway.toFixed(1), +sim.avgHome.toFixed(1)] }); }
     const spH = byKey('sp', 'home'), spA = byKey('sp', 'away');
     if (spH && spA && spH.line !== null && spH.line !== undefined) { const pr = real && spH.odds && spA.odds; up({ k: `${ev.sport}:${ev.eventId}:sp`, kind: 'game', mkt: 'sp', lab: MARKET_NAMES[ev.sport][0], sideKey: 'home', line: spH.line, p: spH.pNoPush, pm: pr ? spH.nv ?? devig(spH.odds, spA.odds) : null, oA: pr ? spH.odds : null, oB: pr ? spA.odds : null }); }
     const ov = byKey('tot', 'over'), un = byKey('tot', 'under');
@@ -4810,7 +4918,7 @@ async function recapLogAll() {
   RECAP.busy = true;
   try {
     const now = Date.now();
-    for (const sp of ['NFL', 'NBA', 'NHL', 'CFB', 'CBB']) {
+    for (const sp of ['NFL', 'NBA', 'NHL', 'CFB', 'CBB', ...(STORE.socUsed || [])]) {
       const last = REG.schedSync[sp];
       if (!last || now - new Date(last).getTime() > 2 * 3600e3) { try { await fetchSchedule(sp); } catch { continue; } }
       for (const ev of REG.events.values()) {
@@ -4848,7 +4956,7 @@ function renderRecap() {
   for (const r of rows) { const k = `${r.sport}:${r.eid}`; if (!games.has(k)) games.set(k, { sport: r.sport, game: r.game, start: r.start, recs: [] }); games.get(k).recs.push(r); }
   // day summary: did the model's lean (>50%) hit?
   const tally = {}; const bump = (k, ok) => { tally[k] ||= [0, 0]; tally[k][ok ? 0 : 1]++; };
-  for (const r of rows) if ((r.y === 0 || r.y === 1) && Math.abs(r.p - 0.5) >= 0.02) bump(r.kind === 'game' ? (r.mkt === 'ml' ? 'Moneyline' : r.mkt === 'sp' ? 'Spread' : 'Total') : 'Player props', (r.p > 0.5) === (r.y === 1));
+  for (const r of rows) if ((r.y === 0 || r.y === 1) && !(r.mkt === 'ml' && r.pd != null) && Math.abs(r.p - 0.5) >= 0.02) bump(r.kind === 'game' ? (r.mkt === 'ml' ? 'Moneyline' : r.mkt === 'sp' ? 'Spread' : 'Total') : 'Player props', (r.p > 0.5) === (r.y === 1));
   const nGraded = rows.filter(r => r.y === 0 || r.y === 1).length, nPend = rows.filter(r => r.y === undefined).length;
   $('recapStatus').innerHTML = `${fmtDay(RECAP.day)} · ${games.size} game${games.size === 1 ? '' : 's'} · ${nGraded} results in${nPend ? ` · ${nPend} still pending (games not final yet)` : ''}${GR.busy ? ' · checking final scores…' : ''}`;
   $('recapTally').innerHTML = Object.keys(tally).length ? Object.entries(tally).map(([k, [w, l]]) => `<div class="inset"><div class="xs muted">${k}: model's pick</div><div class="lg b mono">${w}-${l} <span class="xs ${w / (w + l) >= 0.5 ? 'green' : 'rose'}">${pct(w / (w + l), 0)}</span></div></div>`).join('') : '';
@@ -4864,14 +4972,17 @@ function renderRecap() {
     const lines = [];
     // moneyline
     if (ml) {
-      const pA = 1 - ml.p, pH = ml.p;   // p = home team
+      const pD = ml.pd ?? null, pA = 1 - ml.p - (pD || 0), pH = ml.p;   // p = home team (soccer: pd = draw)
       const nA = away, nH = home;
-      if (ml.y === 0 || ml.y === 1) {
+      const [sa, sh] = String(ml.act || '').split('-').map(Number);
+      if (pD !== null && (ml.y === 0 || ml.y === 1) && sa === sh) {
+        lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('win', `<b>Draw</b> · model ${pct(pD, 0)}`)}${recapChip('loss', `${esc(nA)} · model ${pct(pA, 0)}`)}${recapChip('loss', `${esc(nH)} · model ${pct(pH, 0)}`)}${pickMark(pD > Math.max(pA, pH))}</div>`);
+      } else if (ml.y === 0 || ml.y === 1) {
         const homeWon = ml.y === 1;
-        const [W, wp, L, lp] = homeWon ? [nH, pH, nA, pA] : [nA, pA, nH, pH];
+        const [W, wp, L, lp] = homeWon ? [nH, pH, nA, pA] : [nA, pA, nH, pH];   // soccer: a draw is handled above
         lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('win', `<b>${esc(W)}</b> won · model ${pct(wp, 0)}`)}${recapChip('loss', `${esc(L)} lost · model ${pct(lp, 0)}`)}${pickMark(leanOk(wp))}</div>`);
       } else if (ml.y === null) lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('push', `Draw / no contest${ml.act ? ' · ' + esc(ml.act) : ''}`)}</div>`);
-      else lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('pend', `Pending · model ${esc(nA)} ${pct(pA, 0)} / ${esc(nH)} ${pct(pH, 0)}`)}</div>`);
+      else lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('pend', `Pending · model ${esc(nA)} ${pct(pA, 0)}${pD !== null ? ` / draw ${pct(pD, 0)}` : ''} / ${esc(nH)} ${pct(pH, 0)}`)}</div>`);
     }
     if (sp && sp.line !== null && sp.line !== undefined) {
       const hl = signed(sp.line), al = signed(-sp.line);
@@ -4917,7 +5028,7 @@ function renderRecap() {
     if (!lines.length && !props) return '';
     const when = new Date(g.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     return `<div class="ol-card stack" style="gap:.4rem">
-      <div class="row between xs"><b>${{ NFL: '🏈', CFB: '🏈', NBA: '🏀', NHL: '🏒', CBB: '🏀' }[g.sport] || ''} ${esc(g.game)}</b><span class="muted">${score ? `final ${esc(away)} ${esc(score)} ${esc(home)}` : when}</span></div>
+      <div class="row between xs"><b>${spIcon(g.sport)} ${esc(g.game)}</b><span class="muted">${score ? `final ${esc(away)} ${esc(score)} ${esc(home)}` : when}</span></div>
       ${lines.join('')}${props}
     </div>`;
   }).join('');
@@ -5090,12 +5201,24 @@ let rerunTimer = null;
 const rerunSoon = () => { clearTimeout(rerunTimer); rerunTimer = setTimeout(runSelected, 90); };
 
 function bind() {
-  $('sportPills').addEventListener('click', e => {
-    const b = e.target.closest('[data-sport]'); if (!b || b.dataset.sport === APP.sport) return;
-    APP.sport = b.dataset.sport; APP.eventId = null; APP.simCache.clear();
+  // soccer league dropdowns (header, prop outliers, game-line outliers, ratings/recap/report filters)
+  const socOptions = SOC_KEYS.map(k => `<option value="${k}">${esc(SPORTS[k].name)}</option>`).join('');
+  for (const id of ['socLeague', 'olSocLeague', 'gloSocLeague']) $(id).innerHTML = socOptions;
+  document.querySelectorAll('optgroup[data-soc]').forEach(g => { g.innerHTML = socOptions; });
+  const switchSport = sp => {
+    if (!sp || sp === APP.sport) return;
+    if (isSoc(sp)) { STORE.socLeague = sp; STORE.socUsed = [...new Set([sp, ...(STORE.socUsed || [])])].slice(0, 6); save(); }
+    APP.sport = sp; APP.eventId = null; APP.simCache.clear();
     if (!SPORTS[APP.sport].props && ['props'].includes(APP.view)) APP.view = 'sim';
     if ((!SPORTS[APP.sport].props && ['props', 'td', 'td30'].includes(APP.tab)) || (APP.tab === 'td30' && APP.sport !== 'NBA')) APP.tab = 'summary';
     renderChrome(); syncSport();
+  };
+  $('socLeague').addEventListener('change', e => switchSport(e.target.value));
+  $('olSocLeague').addEventListener('change', e => { if (OL.busy) return; STORE.ol.tab = STORE.ol.socLeague = e.target.value; OL.errors = []; $('olMarket').value = ''; save(); renderOutliers(); });
+  $('gloSocLeague').addEventListener('change', e => { if (GLO.busy) return; STORE.glo.tab = STORE.glo.socLeague = e.target.value; GLO.err = ''; save(); renderGLO(); });
+  $('sportPills').addEventListener('click', e => {
+    const b = e.target.closest('[data-sport]'); if (!b) return;
+    switchSport(b.dataset.sport === 'SOC' ? (isSoc(APP.sport) ? APP.sport : STORE.socLeague || 'EPL') : b.dataset.sport);
   });
   $('viewNav').addEventListener('click', e => {
     const b = e.target.closest('[data-view]'); if (!b) return;
