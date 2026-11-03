@@ -74,6 +74,7 @@
   .rc-win { background: rgba(16,185,129,.16); border-color: rgba(52,211,153,.55); color: #a7f3d0; }
   .rc-loss { background: rgba(244,63,94,.15); border-color: rgba(251,113,133,.55); color: #fecdd3; }
   .rc-push, .rc-pend { background: rgba(148,163,184,.12); border-color: rgba(148,163,184,.35); color: #cbd5e1; }
+  .rc-x { opacity: .8; }
   .rc-mark { font-size: .7rem; font-weight: 700; } .rc-ok { color: var(--green); } .rc-no { color: var(--muted); }
   .rc-tally { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .rc-plist { display: grid; gap: .35rem; margin-top: .45rem; }
@@ -426,7 +427,7 @@
       <div class="row between">
         <div>
           <h2 class="sm xb">📰 Daily recap</h2>
-          <p class="note" style="margin:0">Every game's result next to what the model said <b>before</b> it started, using your sliders and settings at that time (tap "Model before the game" to see them). <span class="green b">Green</span> = the winning team, the team that covered, the OVER, players over their line. <span class="rose b">Red</span> = the losing team, the team that didn't cover, the UNDER, players under their line. "✓ model" means the model leaned the right way.</p>
+          <p class="note" style="margin:0">Every game's result next to what the model said <b>before</b> it started, using your sliders and settings at that time (tap "Model before the game" to see them). <span class="green b">Green</span> = the side the model gave the higher %, <span class="rose b">red</span> = the side it gave the lower %. Inside each chip, <b>✓</b> shows what actually happened (won, covered, hit) and ✗ what didn't. "✓ model" means the model's higher side was right.</p>
         </div>
         <button type="button" id="recapGrade" class="btn-go">↻ Update results</button>
       </div>
@@ -4935,6 +4936,15 @@ async function recapLogAll() {
 const dayKey = iso => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 STORE.recap = { sport: '', props: true, q: '', ...(STORE.recap || {}) };
 function recapChip(kind, text, title = '') { return `<span class="rc-chip rc-${kind}" title="${esc(title)}">${text}</span>`; }
+// one market's sides coloured by the model's %: highest = green, lowest = red (a 3rd side in between = grey); ✓/✗ = result
+function rcSides(sides) {
+  const ps = sides.map(x => x.p), hi = Math.max(...ps), lo = Math.min(...ps), tie = hi - lo < 0.005;
+  return sides.map(x => {
+    const kind = tie ? 'pend' : x.p === hi ? 'win' : x.p === lo ? 'loss' : 'pend';
+    const tag = x.hit === true ? ` · <b>✓ ${x.yes}</b>` : x.hit === false ? ` · <span class="rc-x">✗ ${x.no}</span>` : '';
+    return recapChip(kind, `${x.label} · model ${pct(x.p, 0)}${tag}`, x.p === hi ? 'the model rated this side higher' : 'the model rated this side lower');
+  }).join('');
+}
 // p = the model's probability for the side that happened; within 2% of a coin flip there was no real lean
 const leanOk = p => Math.abs(p - 0.5) < 0.02 ? null : p > 0.5;
 const pickMark = ok => ok === null ? '' : ok ? '<span class="rc-mark rc-ok" title="the model leaned this way">✓ model</span>' : '<span class="rc-mark rc-no" title="the model leaned the other way">✗ model</span>';
@@ -4964,40 +4974,43 @@ function renderRecap() {
     $('recapBody').innerHTML = `<div class="inset xs muted">No predictions logged for this day. The app records what the model says before every game while it's open on any of your devices (all sports in the background, about every 30 minutes) and posts the results here once games are final.${SERVER.on ? (PSYNC.loaded.has(RECAP.day) ? ' Your other devices had nothing for this day either.' : ' Checking your other devices…') : ' Shared history is off: the background job (GitHub deploy) isn\'t reachable, so this only shows what this device logged.'}</div>`;
     return;
   }
+  const legend = `<div class="xs muted">Colours show the model's opinion before the game: ${recapChip('win', 'green = higher model %')} ${recapChip('loss', 'red = lower model %')} · <b>✓</b> = what actually happened.</div>`;
   const html = [...games.values()].sort((a, b) => new Date(a.start) - new Date(b.start)).map(g => {
     const recs = g.recs, by = m => recs.find(r => r.mkt === m && r.kind === 'game');
     const ml = by('ml'), sp = by('sp'), tot = by('tot');
     const [away, home] = String(g.game).split(' @ ');
     const score = ml?.act ? String(ml.act).replace('-', ' – ') : '';
     const lines = [];
+    // colours follow the MODEL: the side it rated higher is green, the lower one red; ✓ / ✗ = what actually happened
     // moneyline
     if (ml) {
       const pD = ml.pd ?? null, pA = 1 - ml.p - (pD || 0), pH = ml.p;   // p = home team (soccer: pd = draw)
-      const nA = away, nH = home;
       const [sa, sh] = String(ml.act || '').split('-').map(Number);
-      if (pD !== null && (ml.y === 0 || ml.y === 1) && sa === sh) {
-        lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('win', `<b>Draw</b> · model ${pct(pD, 0)}`)}${recapChip('loss', `${esc(nA)} · model ${pct(pA, 0)}`)}${recapChip('loss', `${esc(nH)} · model ${pct(pH, 0)}`)}${pickMark(pD > Math.max(pA, pH))}</div>`);
-      } else if (ml.y === 0 || ml.y === 1) {
-        const homeWon = ml.y === 1;
-        const [W, wp, L, lp] = homeWon ? [nH, pH, nA, pA] : [nA, pA, nH, pH];   // soccer: a draw is handled above
-        lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('win', `<b>${esc(W)}</b> won · model ${pct(wp, 0)}`)}${recapChip('loss', `${esc(L)} lost · model ${pct(lp, 0)}`)}${pickMark(leanOk(wp))}</div>`);
-      } else if (ml.y === null) lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('push', `Draw / no contest${ml.act ? ' · ' + esc(ml.act) : ''}`)}</div>`);
-      else lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('pend', `Pending · model ${esc(nA)} ${pct(pA, 0)}${pD !== null ? ` / draw ${pct(pD, 0)}` : ''} / ${esc(nH)} ${pct(pH, 0)}`)}</div>`);
+      const done = ml.y === 0 || ml.y === 1, draw = done && sa === sh;
+      const res = side => !done ? null : side === 'draw' ? draw : side === 'home' ? (ml.y === 1 && !draw) : (ml.y === 0 && !draw);
+      const sides = [{ label: `<b>${esc(away)}</b>`, p: pA, hit: res('away'), yes: 'won', no: 'lost' }];
+      if (pD !== null) sides.push({ label: '<b>Draw</b>', p: pD, hit: res('draw'), yes: 'it was a draw', no: 'no draw' });
+      sides.push({ label: `<b>${esc(home)}</b>`, p: pH, hit: res('home'), yes: 'won', no: 'lost' });
+      if (ml.y === null) lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${recapChip('push', `Draw / no contest${ml.act ? ' · ' + esc(ml.act) : ''}`)}</div>`);
+      else lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Moneyline</span>${rcSides(sides)}${done ? pickMark(sides.reduce((b, x) => x.p > b.p ? x : b).hit) : '<span class="xs muted">pending</span>'}</div>`);
     }
     if (sp && sp.line !== null && sp.line !== undefined) {
-      const hl = signed(sp.line), al = signed(-sp.line);
-      if (sp.y === 0 || sp.y === 1) {
-        const [W, wl, wp, L, ll, lp] = sp.y === 1 ? [home, hl, sp.p, away, al, 1 - sp.p] : [away, al, 1 - sp.p, home, hl, sp.p];
-        lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Spread</span>${recapChip('win', `<b>${esc(W)} ${wl}</b> covered · model ${pct(wp, 0)}`)}${recapChip('loss', `${esc(L)} ${ll} · model ${pct(lp, 0)}`)}${pickMark(leanOk(wp))}</div>`);
-      } else if (sp.res === 'push') lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Spread</span>${recapChip('push', `Push at ${esc(home)} ${hl}`)}</div>`);
-      else lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Spread</span>${recapChip('pend', `Pending · ${esc(home)} ${hl} · model cover ${pct(sp.p, 0)}`)}</div>`);
+      const hl = signed(sp.line), al = signed(-sp.line), done = sp.y === 0 || sp.y === 1;
+      if (sp.res === 'push') lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Spread</span>${recapChip('push', `Push at ${esc(home)} ${hl}`)}</div>`);
+      else {
+        const sides = [{ label: `<b>${esc(away)} ${al}</b>`, p: 1 - sp.p, hit: done ? sp.y === 0 : null, yes: 'covered', no: 'didn\'t cover' },
+                       { label: `<b>${esc(home)} ${hl}</b>`, p: sp.p, hit: done ? sp.y === 1 : null, yes: 'covered', no: 'didn\'t cover' }];
+        lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Spread</span>${rcSides(sides)}${done ? pickMark(leanOk(sp.y === 1 ? sp.p : 1 - sp.p)) : '<span class="xs muted">pending</span>'}</div>`);
+      }
     }
     if (tot) {
-      if (tot.y === 0 || tot.y === 1) {
-        const over = tot.y === 1;
-        lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Total</span>${recapChip(over ? 'win' : 'loss', `<b>${over ? 'OVER' : 'UNDER'} ${tot.line}</b> · final ${esc(String(tot.act))}`)}<span class="xs muted">model: over ${pct(tot.p, 0)} / under ${pct(1 - tot.p, 0)}</span>${pickMark(leanOk(over ? tot.p : 1 - tot.p))}</div>`);
-      } else if (tot.res === 'push') lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Total</span>${recapChip('push', `Push at ${tot.line}`)}</div>`);
-      else lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Total</span>${recapChip('pend', `Pending · ${tot.line} · model over ${pct(tot.p, 0)} / under ${pct(1 - tot.p, 0)}`)}</div>`);
+      const done = tot.y === 0 || tot.y === 1;
+      if (tot.res === 'push') lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Total</span>${recapChip('push', `Push at ${tot.line}`)}</div>`);
+      else {
+        const sides = [{ label: `<b>Over ${tot.line}</b>`, p: tot.p, hit: done ? tot.y === 1 : null, yes: 'hit', no: 'missed' },
+                       { label: `<b>Under ${tot.line}</b>`, p: 1 - tot.p, hit: done ? tot.y === 0 : null, yes: 'hit', no: 'missed' }];
+        lines.push(`<div class="rc-line"><span class="xs muted rc-lab">Total</span>${rcSides(sides)}${done ? `<span class="xs muted">final ${esc(String(tot.act))}</span>${pickMark(leanOk(tot.y === 1 ? tot.p : 1 - tot.p))}` : '<span class="xs muted">pending</span>'}</div>`);
+      }
     }
     // player props
     let props = '';
@@ -5008,15 +5021,12 @@ function renderRecap() {
         const lab = String(r.lab || '').replace(/^(NBA|NFL|NHL|CFB|CBB) /, ''), unit = WHY_UNIT[r.market] || '';
         const isYes = r.kind === 'yes';
         const what = isYes ? lab : `${r.line} ${unit}`;
-        const pOver = r.p;
-        if (r.y === 0 || r.y === 1) {
-          const up = r.y === 1;
-          const text = isYes ? `<b>${esc(r.player)}</b> ${up ? 'YES' : 'NO'} · ${esc(lab)}`
-            : `<b>${esc(r.player)}</b> ${up ? 'OVER' : 'UNDER'} ${esc(what)} · had ${esc(String(r.act))}`;
-          return `<div class="rc-line">${recapChip(up ? 'win' : 'loss', text)}<span class="xs muted">${esc(r.team || '')} · model ${isYes ? 'yes' : 'over'} ${pct(pOver, 0)}</span>${pickMark(leanOk(up ? pOver : 1 - pOver))}</div>`;
-        }
+        const pOver = r.p, done = r.y === 0 || r.y === 1;
         if (r.y === null) return `<div class="rc-line">${recapChip('push', `<b>${esc(r.player)}</b> ${esc(what)} · ${esc(r.res === 'push' ? 'push' : r.why || 'void (did not play)')}`)}</div>`;
-        return `<div class="rc-line">${recapChip('pend', `<b>${esc(r.player)}</b> ${esc(isYes ? lab : 'O/U ' + what)} · pending`)}<span class="xs muted">model ${isYes ? 'yes' : 'over'} ${pct(pOver, 0)}</span></div>`;
+        const sides = isYes
+          ? [{ label: 'Yes', p: pOver, hit: done ? r.y === 1 : null, yes: 'hit', no: 'missed' }, { label: 'No', p: 1 - pOver, hit: done ? r.y === 0 : null, yes: 'hit', no: 'missed' }]
+          : [{ label: `Over ${esc(String(r.line))}`, p: pOver, hit: done ? r.y === 1 : null, yes: 'hit', no: 'missed' }, { label: `Under ${esc(String(r.line))}`, p: 1 - pOver, hit: done ? r.y === 0 : null, yes: 'hit', no: 'missed' }];
+        return `<div class="rc-line"><span class="xs"><b>${esc(r.player)}</b> <span class="muted">${esc(r.team || '')} · ${esc(isYes ? lab : `${lab || unit}`)}${done && !isYes ? ` · had ${esc(String(r.act))}` : ''}</span></span>${rcSides(sides)}${done ? pickMark(leanOk(r.y === 1 ? pOver : 1 - pOver)) : '<span class="xs muted">pending</span>'}</div>`;
       }).join('')}</div></details>`;
     }
     if (ml?.sl) {
@@ -5032,7 +5042,7 @@ function renderRecap() {
       ${lines.join('')}${props}
     </div>`;
   }).join('');
-  $('recapBody').innerHTML = `<div class="card-list">${html}</div>`;
+  $('recapBody').innerHTML = `${legend}<div class="card-list">${html}</div>`;
 }
 function bindRecap() {
   $('recapDay').addEventListener('change', e => { RECAP.day = e.target.value; renderRecap(); });
