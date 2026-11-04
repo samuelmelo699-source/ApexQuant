@@ -134,6 +134,8 @@
   details > summary::-webkit-details-marker { display: none; }
   .slot { display: grid; grid-template-columns: 44px 1fr auto auto; gap: .35rem; align-items: center; padding: .3rem; border: 1px solid var(--line); border-radius: .5rem; background: #080d19; }
   .slot select { min-width: 0; width: 100%; }
+  .an-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .6rem; }
+  .an-box table td { padding: .15rem .35rem; } .an-box table td:last-child { text-align: right; }
   .slot input { width: 64px; }
   .slider-row { display: flex; justify-content: space-between; font-size: .75rem; }
   .note { font-size: .75rem; color: var(--muted); }
@@ -2027,6 +2029,20 @@ function parseBox(sport, d) {
       const f = (B.fs[tid] ||= { shot: sh, make: null, starters: [] });
       if (!f.make && p.scoringPlay) f.make = sh;
     }
+    // every player's line: [id, name, teamId, pos, min, pts, reb, ast, 3pm, blk, stl, starter] (for the 🔍 Analyze matchup panel)
+    B.pl = [];
+    for (const blk of d.boxscore?.players || []) {
+      const tid = String(blk.team?.id || '');
+      for (const st of blk.statistics || []) {
+        const ix = [boxIdx(st, ['minutes'], ['MIN']), boxIdx(st, ['points'], ['PTS']), boxIdx(st, ['rebounds', 'totalRebounds'], ['REB']), boxIdx(st, ['assists'], ['AST']),
+          boxIdx(st, ['threePointFieldGoalsMade-threePointFieldGoalsAttempted'], ['3PT']), boxIdx(st, ['blocks'], ['BLK']), boxIdx(st, ['steals'], ['STL'])];
+        for (const a of st.athletes || []) {
+          if (a.didNotPlay || !a.stats?.length || !a.athlete?.id) continue;
+          const min = cellN(a, ix[0]); if (!(min > 0)) continue;
+          B.pl.push([String(a.athlete.id), a.athlete.displayName || a.athlete.shortName || '', tid, posGroup(a.athlete) || '', min, ...ix.slice(1).map(i => cellN(a, i, 0)), a.starter ? 1 : 0]);
+        }
+      }
+    }
     for (const blk of d.boxscore?.players || []) { const tid = String(blk.team?.id || ''); if (!B.fs[tid]) continue; const ids = new Set(); for (const st of blk.statistics || []) for (const a of st.athletes || []) if (a.starter && a.athlete?.id) ids.add(String(a.athlete.id)); B.fs[tid].starters = [...ids]; }
   }
   for (const ts of d.boxscore?.teams || []) {
@@ -2065,7 +2081,7 @@ function parseBox(sport, d) {
 async function ensureBoxes(events, perTeam = 6) {
   const sport = events[0]?.sport; if (!['NBA', 'NFL', 'NHL'].includes(sport) || BOX.busy) return 0;
   const c = boxCache(), want = new Set();
-  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && (!c[`${sport}:${g.id}`] || (sport === 'NBA' && (c[`${sport}:${g.id}`].tip === undefined || c[`${sport}:${g.id}`].fs === undefined)))) want.add(g.id);
+  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && (!c[`${sport}:${g.id}`] || (sport === 'NBA' && (c[`${sport}:${g.id}`].tip === undefined || c[`${sport}:${g.id}`].fs === undefined || c[`${sport}:${g.id}`].pl === undefined)))) want.add(g.id);
   if (!want.size) return 0;
   BOX.busy = true;
   const queue = [...want]; let n = 0;
@@ -3900,7 +3916,8 @@ function renderOutliers() {
   const chartRow = OL.chart ? OL.rows.find(r => r.id === OL.chart) : null, chartX = chartRow ? paFromOutlier(chartRow) : null;
   PA.cw = $('olBody').clientWidth || 600;
   const chartBox = chartRow ? `<div class="inset pa-detail-box" style="margin-bottom:.6rem">${chartX && chartX.r ? paDetail(chartX) : chartX?.loading ? `<div class="xs muted">Loading ${esc(chartRow.player)}'s game log from ESPN…</div>` : `<div class="xs muted">Couldn't find ${esc(chartRow.player)} on a loaded ${esc(chartRow.sport)} roster yet (scan with ${esc(chartRow.sport)} picked at the top).</div>`}<div style="text-align:right;margin-top:.3rem"><button type="button" class="xs" data-olchartclose>Close ✕</button></div></div>` : '';
-  $('olBody').innerHTML = errs + chartBox + `<div class="ol-grid">${rows.map(r => {
+  const anBox = AN.open && rows.some(r => r.id === AN.open) ? `<div class="inset an-box" style="margin-bottom:.6rem"></div>` : '';
+  $('olBody').innerHTML = errs + anBox + chartBox + `<div class="ol-grid">${rows.map(r => {
     const when = new Date(r.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     const sus = r.ev > 0.5;
     const age = r.ageMin === null ? '' : ` · updated ${r.ageMin < 1 ? '<1' : Math.round(r.ageMin)}m ago`;
@@ -3915,7 +3932,7 @@ function renderOutliers() {
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(r.fairOdds)} (${pct(r.pWin)}) · ${r.nBooks} books${age}</div>
       <div class="row between xs" style="margin-top:.4rem">
         <span>${r.modelP !== null ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
-        <span class="row" style="gap:.35rem">${r.mm && (r.side !== 'Yes' || r.mm === 'nba_dd') ? `<button type="button" class="xs ${OL.chart === r.id ? 'on' : ''}" data-olchart="${esc(r.id)}">📈 Chart</button>` : ''}</span>
+        <span class="row" style="gap:.35rem">${r.mm && (r.side !== 'Yes' || r.mm === 'nba_dd') ? `<button type="button" class="xs ${OL.chart === r.id ? 'on' : ''}" data-olchart="${esc(r.id)}">📈 Chart</button>` : ''}${anOK(r) ? `<button type="button" class="xs ${AN.open === r.id ? 'on' : ''}" data-olan="${esc(r.id)}">🔍 Analyze</button>` : ''}</span>
       </div>
       ${r.stale ? `<div class="xs amber" style="margin-top:.3rem">⚠ Possibly stale: ${r.lagMin !== null && r.lagMin > 10 ? `this book updated ${Math.round(r.lagMin)} min before the others` : `price is ${Math.round(r.ageMin)} min old`}.</div>` : ''}
       ${sus ? '<div class="xs amber" style="margin-top:.3rem">Unusually large edge: often a stale or wrong line that books limit or void.</div>' : ''}
@@ -3925,6 +3942,7 @@ function renderOutliers() {
       </details>
     </div>`;
   }).join('')}</div>`;
+  if (anBox) anPaint();
 }
 
 /* =====================================================================
@@ -4092,6 +4110,8 @@ function bindOutliers() {
   $('olBody').addEventListener('click', e => {
     const b = e.target.closest('[data-track]'); if (b) { trackOutlier(b.dataset.track); return; }
     if (e.target.closest('[data-olchartclose]')) { OL.chart = null; renderOutliers(); return; }
+    if (e.target.closest('[data-olanclose]')) { AN.open = null; renderOutliers(); return; }
+    const an = e.target.closest('[data-olan]'); if (an) { if (AN.open === an.dataset.olan) { AN.open = null; renderOutliers(); } else anOpen(an.dataset.olan); return; }
     const c = e.target.closest('[data-olchart]'); if (c) { OL.chart = OL.chart === c.dataset.olchart ? null : c.dataset.olchart; renderOutliers(); if (OL.chart) $('olBody').scrollIntoView({ block: 'start', behavior: 'smooth' }); }
   });
 
@@ -4922,6 +4942,250 @@ document.addEventListener('click', e => {
   if (x && box) { const keep = box.querySelector('[data-paclose], [data-olchartclose]')?.outerHTML || ''; box.innerHTML = paDetail(x) + (keep ? `<div style="text-align:right;margin-top:.3rem">${keep}</div>` : ''); }
 });
 // the same analysis for a prop outlier card: model row + this season's game log, slider starts at the card's line
+/* =====================================================================
+   🔍 ANALYZE — opponent defensive matchup for one NBA prop (Prop outliers cards)
+   Everything comes from this season's ESPN box scores (every player's line in every game) and the
+   player's ESPN game logs. Nothing is estimated from betting lines. Metrics with too few games say so.
+   ===================================================================== */
+const AN = { open: null, busy: false, msg: '', h2h: {}, res: new Map() };
+const AN_MKT = { nba_pts: ['pts'], nba_reb: ['reb'], nba_ast: ['ast'], nba_3pm: ['tpm'], nba_blk: ['blk'], nba_stl: ['stl'], nba_pra: ['pts', 'reb', 'ast'], nba_pr: ['pts', 'reb'], nba_pa: ['pts', 'ast'], nba_ra: ['reb', 'ast'] };
+const AN_NAME = { nba_pts: 'points', nba_reb: 'rebounds', nba_ast: 'assists', nba_3pm: 'threes', nba_blk: 'blocks', nba_stl: 'steals', nba_pra: 'pts+reb+ast', nba_pr: 'pts+reb', nba_pa: 'pts+ast', nba_ra: 'reb+ast', nba_dd: 'double-doubles' };
+const AN_POS = { G: 'guard', F: 'forward', C: 'center' };
+const anOK = r => r.sport === 'NBA' && (AN_MKT[r.mm] || r.mm === 'nba_dd') && (r.side !== 'Yes' || r.mm === 'nba_dd');
+// a box line → {min, pts, reb, ast, tpm, blk, stl}
+const anLine = a => ({ id: a[0], name: a[1], team: a[2], pos: a[3], min: a[4], pts: a[5], reb: a[6], ast: a[7], tpm: a[8], blk: a[9], stl: a[10], st: a[11] });
+// the prop's stat from a line; double-double = two of PTS/REB/AST/BLK/STL at 10+ (1 or 0)
+const anVal = (l, mm) => mm === 'nba_dd' ? (['pts', 'reb', 'ast', 'blk', 'stl'].filter(k => (l[k] || 0) >= 10).length >= 2 ? 1 : 0) : AN_MKT[mm] ? AN_MKT[mm].reduce((a, k) => a + (l[k] || 0), 0) : null;
+const anSeasonStart = () => { const n = new Date(), yr = n.getMonth() < 8 ? n.getFullYear() - 1 : n.getFullYear(); return new Date(yr, 9, 1); };
+const anAvg = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+// a team's finished games this season (newest first) with box lines: { date, opp abbr, against: lines of the players it faced, total }
+function anGames(tid) {
+  const c = boxCache(), t0 = anSeasonStart().getTime(), out = [];
+  for (const g of teamGames('NBA', tid)) {
+    if (new Date(g.date).getTime() < t0) continue;
+    const b = c[`NBA:${g.id}`]; if (!b?.pl?.length) continue;
+    out.push({ id: g.id, date: g.date, opp: g.opp, home: g.home, total: g.pf + g.pa, against: b.pl.filter(a => a[2] !== String(tid)).map(anLine) });
+  }
+  return out;
+}
+const anTeams = () => { const ids = new Set(), t0 = anSeasonStart().getTime(); for (const [k, evs] of Object.entries(resultsCache())) if (k.startsWith('NBA:')) for (const ev of evs || []) { if (ev.season?.type === 1 || new Date(ev.date).getTime() < t0) continue; for (const c of ev.competitions?.[0]?.competitors || []) if (c.team?.id) ids.add(String(c.team.id)); } return [...ids]; };
+// box scores of every team's last 20 games (once; afterwards only new games are fetched)
+async function anEnsureLeague() {
+  await seasonResultEvents('NBA');
+  const c = boxCache(), t0 = anSeasonStart().getTime(), want = new Set();
+  for (const tid of anTeams()) for (const g of teamGames('NBA', tid).filter(g => new Date(g.date).getTime() >= t0).slice(0, 20)) if (!c[`NBA:${g.id}`]?.pl) want.add(g.id);
+  const total = want.size, queue = [...want]; let done = 0, n = 0;
+  if (total) {
+    const tick = () => { AN.msg = `Loading this season's box scores from ESPN: ${done}/${total} games (first time only)…`; anPaint(); };
+    tick();
+    await Promise.all(Array.from({ length: 6 }, async () => { while (queue.length) { const id = queue.shift(); try { const b = parseBox('NBA', await fetchJson(urlFor('NBA', `summary?event=${id}`), 15000, 0)); if (b) { c[`NBA:${id}`] = b; n++; } } catch {} done++; if (done % 5 === 0) tick(); } }));
+    if (n) saveBox();
+  }
+  return n;
+}
+// the player's game logs: this season + the 2 before (for head-to-head)
+async function anEnsureLogs(pid) {
+  if (!REG.logs[`NBA:${pid}`]) await fetchGamelog('NBA', pid).catch(() => { REG.logs[`NBA:${pid}`] = { t: Date.now(), games: [] }; });
+  if (AN.h2h[pid]) return;
+  const yr = anSeasonStart().getFullYear() + 1, past = [];
+  for (const s of [yr - 1, yr - 2]) { try { past.push(...parseGamelog(await fetchJson(`https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${pid}/gamelog?season=${s}`, 10000, 0))); } catch {} }
+  AN.h2h[pid] = past;
+}
+const anLogLine = g => ({ min: statFrom(g.names, g.stats, ['minutes']) ?? 0, pts: statFrom(g.names, g.stats, LOG_STATS.nba_pts) ?? 0, reb: statFrom(g.names, g.stats, LOG_STATS.nba_reb) ?? 0, ast: statFrom(g.names, g.stats, LOG_STATS.nba_ast) ?? 0,
+  tpm: statFrom(g.names, g.stats, LOG_STATS.nba_3pm) ?? 0, blk: statFrom(g.names, g.stats, LOG_STATS.nba_blk) ?? 0, stl: statFrom(g.names, g.stats, LOG_STATS.nba_stl) ?? 0 });
+function anPlayer(r) {
+  let P = null;
+  if (r.pid) P = [...REG.players.values()].find(p => p.sport === 'NBA' && p.playerId === String(r.pid));
+  if (!P) P = fsResolver([...REG.players.values()].filter(p => p.sport === 'NBA').map(p => ({ name: p.playerName, value: p })))(r.player);
+  if (!P) return null;
+  const start = new Date(r.start).getTime();
+  const ev = [...REG.events.values()].filter(e => e.sport === 'NBA' && (String(e.awayTeamId) === String(P.teamId) || String(e.homeTeamId) === String(P.teamId)))
+    .sort((a, b) => Math.abs(new Date(a.start) - start) - Math.abs(new Date(b.start) - start))[0];
+  if (!ev) return { P };
+  const home = String(ev.homeTeamId) === String(P.teamId);
+  return { P, ev, oppId: String(home ? ev.awayTeamId : ev.homeTeamId), oppAbbr: home ? ev.awayAbbr : ev.homeAbbr, home };
+}
+function anCompute(r) {
+  const who = anPlayer(r); if (!who?.ev) return { err: who ? `Couldn't find ${r.player}'s game on the NBA schedule.` : `Couldn't find ${r.player} on a loaded NBA roster (pick NBA at the top once, then come back).` };
+  const { P, ev, oppId, oppAbbr } = who, mm = r.mm, dd = mm === 'nba_dd', side = dd ? 'O' : r.side, line = dd ? 0.5 : r.line;
+  const hit = v => side === 'U' ? v < line : v > line, graded = v => dd || v !== line;
+  const rate = xs => { const g = xs.filter(graded); return { h: g.filter(hit).length, n: g.length }; };
+  // the player: this season's log
+  const mine = (REG.logs[`NBA:${P.playerId}`]?.games || []).map(g => ({ g, l: anLogLine(g) })).filter(x => x.l.min > 0);
+  const vals = mine.map(x => anVal(x.l, mm));
+  const avgMin = anAvg(mine.slice(0, 10).map(x => x.l.min));
+  let pos = ['G', 'F', 'C'].includes(P.group) ? P.group : null;
+  const qualMin = avgMin ? Math.round(Math.max(15, 0.75 * avgMin)) : 20;
+  // opponent + league from box scores
+  const og = anGames(oppId);
+  if (!pos) { const c = boxCache(); for (const b of Object.values(c)) { const a = b.pl?.find(x => x[0] === P.playerId); if (a?.[3]) { pos = a[3]; break; } } }
+  const perGame = (games, f) => games.map(gm => gm.against.filter(f).reduce((a, l) => a + anVal(l, mm), 0));
+  const isPos = l => l.pos === pos, isQual = l => l.pos === pos && l.min >= qualMin;
+  const league = anTeams().map(tid => { const gs = anGames(tid); if (gs.length < 3) return null;
+    const q = gs.flatMap(gm => gm.against.filter(isQual));
+    return { tid, n: gs.length, team: anAvg(perGame(gs, () => true)), pos: pos ? anAvg(perGame(gs, isPos)) : null, qual: q.length ? anAvg(q.map(l => anVal(l, mm))) : null, qn: q.length, total: anAvg(gs.map(g => g.total)) }; }).filter(Boolean);
+  const lgAvg = k => anAvg(league.map(t => t[k]).filter(v => v !== null));
+  const rankOf = (k, v) => { const xs = league.map(t => t[k]).filter(x => x !== null).sort((a, b) => a - b); return v === null || !xs.length ? null : { r: xs.filter(x => x < v - 1e-9).length + 1, of: xs.length }; };   // 1 = allows the least
+  const win = (gs, W) => gs.slice(0, W);
+  const T = { season: og.length ? anAvg(perGame(og, () => true)) : null };
+  for (const W of [5, 10, 20]) T['l' + W] = og.length ? anAvg(perGame(win(og, W), () => true)) : null;
+  const PO = { season: pos && og.length ? anAvg(perGame(og, isPos)) : null };
+  for (const W of [5, 10, 20]) PO['l' + W] = pos && og.length ? anAvg(perGame(win(og, W), isPos)) : null;
+  const qAll = og.flatMap(gm => gm.against.filter(isQual).map(l => ({ ...l, date: gm.date, teamAbbr: gm.opp, v: anVal(l, mm) })));
+  const qualAvg = qAll.length ? anAvg(qAll.map(l => l.v)) : null;
+  const oppHit = {}; for (const W of [5, 10, 20]) oppHit['l' + W] = rate(win(og, W).flatMap(gm => gm.against.filter(isQual).map(l => anVal(l, mm))));
+  const examples = qAll.slice(0, 10).map(l => ({ ...l, ok: graded(l.v) ? hit(l.v) : null }));
+  // head-to-head (this season + 2 before)
+  const h2hG = [...(REG.logs[`NBA:${P.playerId}`]?.games || []), ...(AN.h2h[P.playerId] || [])].filter(g => g.oppId === oppId).map(g => ({ g, l: anLogLine(g) })).filter(x => x.l.min > 0)
+    .sort((a, b) => String(b.g.date).localeCompare(String(a.g.date))).slice(0, 5).map(x => ({ date: x.g.date, home: x.g.home, v: anVal(x.l, mm), min: x.l.min }));
+  // environment: pace proxy (points in the opponent's games vs league) × his projected minutes vs his average
+  const sim = APP.simCache.get(`NBA:${ev.eventId}`), mrow = sim ? [...(sim.players || [])].find(p => String(p.playerId) === P.playerId && p.mx) : null;
+  const paceR = og.length >= 3 && lgAvg('total') ? anAvg(og.map(g => g.total)) / lgAvg('total') : null;
+  const minR = mrow?.mx?.min && mrow.mx.minSeason ? mrow.mx.min / mrow.mx.minSeason : null;
+  const pv = { pts: 1, reb: 0.5, ast: 0.8, tpm: 1, blk: 0.3, stl: 0.5 }, alpha = dd ? 0.6 : anAvg((AN_MKT[mm] || ['pts']).map(k => pv[k]));
+  const envR = paceR === null && minR === null ? null : Math.pow(paceR ?? 1, alpha) * (minR ?? 1);
+  // ---- favorability score for the OVER (Under = 100 − Over); each part 0-100, 50 = neutral
+  const sh = (h, n, k) => n ? 100 * (h + k * 0.5) / (n + k) : null;
+  const tR = T.season !== null && lgAvg('team') ? T.season / lgAvg('team') : null, qR = qualAvg !== null && lgAvg('qual') ? qualAvg / lgAvg('qual') : null;
+  const rs = [tR, qR].filter(x => x !== null), defRatio = rs.length ? anAvg(rs) : null, kDef = Math.min(1, (og.length / (og.length + 4)));
+  const sc = x => clamp(50 + x * 250, 0, 100);
+  const pl10 = rate(vals.slice(0, 10)), h2hR = rate(h2hG.map(x => x.v));
+  const parts = [
+    { k: 'Opponent defense vs his position', w: 30, v: defRatio !== null && og.length >= 3 ? sc((defRatio - 1) * kDef) : null },
+    { k: `Comparable ${pos ? AN_POS[pos] + 's' : 'players'} vs this line (last 10)`, w: 25, rate: 1, v: oppHit.l10.n >= 3 ? sh(oppHit.l10.h, oppHit.l10.n, 4) : null },
+    { k: 'His recent form at this line', w: 20, rate: 1, v: pl10.n >= 3 ? sh(pl10.h, pl10.n, 3) : null },
+    { k: 'Minutes, pace & environment', w: 15, v: envR !== null ? sc(envR - 1) : null },
+    { k: 'Head-to-head history', w: 10, rate: 1, v: h2hR.n >= 2 ? sh(h2hR.h, h2hR.n, 2) : null }];
+  for (const p of parts) if (p.rate && p.v !== null && side === 'U') p.v = 100 - p.v;   // hit rates were counted for the bet's side: store every part in the Over's view
+  const avail = parts.filter(p => p.v !== null), wSum = avail.reduce((a, p) => a + p.w, 0);
+  const over = wSum ? Math.round(avail.reduce((a, p) => a + p.w * p.v, 0) / wSum) : null;
+  const conf = !wSum ? 'None' : wSum >= 90 && og.length >= 8 && qAll.length >= 12 ? 'High' : wSum >= 65 && og.length >= 4 ? 'Medium' : 'Low';
+  const last = og[0]?.date || null;
+  return { P, ev, oppId, oppAbbr, pos, mm, dd, side, line, qualMin, avgMin, og, T, PO, qualAvg, qN: qAll.length, oppHit, examples, h2hG, h2hR, vals, pl10, plSeason: rate(vals),
+    pAvg: vals.length ? anAvg(vals.slice(0, 10)) : null, league, lg: { team: lgAvg('team'), pos: lgAvg('pos'), qual: lgAvg('qual') },
+    rank: { team: rankOf('team', T.season), pos: rankOf('pos', PO.season), qual: rankOf('qual', qualAvg) }, paceR, minR, mrow, parts, over, conf, wSum, last };
+}
+const anLabel = s => s === null ? 'Insufficient data' : s >= 80 ? 'Very Favorable' : s >= 65 ? 'Favorable' : s >= 45 ? 'Neutral' : s >= 25 ? 'Unfavorable' : 'Very Unfavorable';
+const anCol = s => s === null ? 'muted' : s >= 65 ? 'green' : s >= 45 ? 'amber' : 'rose';
+const anVar = s => `var(--${anCol(s) === 'muted' ? 'muted' : anCol(s)})`;
+const anF = (v, d = 1) => v === null || v === undefined ? '—' : (+v).toFixed(d);
+function anSummary(A) {
+  const st = AN_NAME[A.mm], pn = A.pos ? AN_POS[A.pos] + 's' : 'players', s = [], over = A.over, lean = over === null ? null : over >= 55 ? 'Over' : over <= 45 ? 'Under' : null;
+  const lt = A.dd ? 'record a double-double' : `go ${A.side === 'U' ? 'under' : 'over'} ${A.line}`;
+  if (A.T.season !== null && A.rank.team) s.push(`${A.oppAbbr} allows ${anF(A.T.season, A.dd ? 2 : 1)} ${st} per game, ${A.rank.team.r <= A.rank.team.of / 3 ? 'one of the stingiest' : A.rank.team.r > A.rank.team.of * 2 / 3 ? 'one of the most generous' : 'around the middle'} in the league (#${A.rank.team.r} of ${A.rank.team.of} by fewest allowed; league average ${anF(A.lg.team, A.dd ? 2 : 1)}).`);
+  if (A.qualAvg !== null && A.lg.qual !== null) s.push(`${pn[0].toUpperCase() + pn.slice(1)} playing ${A.qualMin}+ minutes against them have ${A.dd ? `had a double-double ${pct(A.qualAvg)} of the time, vs ${pct(A.lg.qual)}` : `averaged ${anF(A.qualAvg)} ${st}, vs ${anF(A.lg.qual)}`} league-wide (${A.qN} player-games).`);
+  if (A.oppHit.l10.n) s.push(`${A.oppHit.l10.h} of ${A.oppHit.l10.n} comparable ${pn} ${A.dd ? 'had a double-double' : `went ${A.side === 'U' ? 'under' : 'over'} ${A.line}`} in ${A.oppAbbr}'s last ${Math.min(10, A.og.length)} games.`);
+  if (A.pl10.n) s.push(`${A.P.playerName} has hit it in ${A.pl10.h} of his last ${A.pl10.n} games${A.pAvg !== null && !A.dd ? ` and averages ${anF(A.pAvg)} ${st} over that span` : ''}.`);
+  if (A.T.l5 !== null && A.T.season && A.og.length >= 6) { const d = (A.T.l5 - A.T.season) / A.T.season; if (Math.abs(d) >= 0.08) s.push(`Trend: they've allowed ${anF(A.T.l5)} over their last 5, ${d > 0 ? 'more' : 'less'} than their season average.`); }
+  if (A.h2hR.n >= 2) s.push(`Against ${A.oppAbbr} he's hit it ${A.h2hR.h} of ${A.h2hR.n} times in recent seasons.`);
+  s.push(over === null ? 'Not enough data yet to score this matchup.' : lean ? `Overall the data leans ${lean} (Over score ${over}, Under score ${100 - over}).` : `Overall the matchup looks neutral (Over score ${over}, Under score ${100 - over}).`);
+  return s.join(' ');
+}
+function anRankBar(rk, side) {
+  if (!rk) return '<span class="muted">Insufficient data</span>';
+  const f = (rk.r - 1) / Math.max(1, rk.of - 1), favOver = f, s = side === 'U' ? 1 - favOver : favOver, col = s >= 0.66 ? 'var(--green)' : s <= 0.33 ? 'var(--rose)' : 'var(--amber)';
+  return `<svg viewBox="0 0 200 22" style="width:100%;max-width:240px;height:auto" role="img" aria-label="rank ${rk.r} of ${rk.of}"><defs><linearGradient id="anG" x1="0" x2="1"><stop offset="0" stop-color="var(--rose)"/><stop offset=".5" stop-color="var(--amber)"/><stop offset="1" stop-color="var(--green)"/></linearGradient></defs>
+    <rect x="2" y="8" width="196" height="6" rx="3" fill="url(#anG)" opacity=".35" ${side === 'U' ? 'transform="matrix(-1 0 0 1 200 0)"' : ''}/><circle cx="${(4 + f * 192).toFixed(1)}" cy="11" r="6" fill="${col}"/></svg>
+    <div class="xs muted" style="display:flex;justify-content:space-between;max-width:240px"><span>allows least</span><span>allows most</span></div>`;
+}
+function anTrend(A) {
+  const gs = A.og.slice(0, 10).reverse(); if (gs.length < 3) return '<div class="xs muted">Insufficient data</div>';
+  const vs = gs.map(gm => gm.against.reduce((a, l) => a + anVal(l, A.mm), 0)), lg = A.lg.team ?? 0;
+  const W = Math.max(280, Math.min(560, (PA.cw || 600) - 40)), H = 150, base = 115, top = 14, maxV = Math.max(...vs, lg) * 1.12 || 1, y = v => base - v / maxV * (base - top), n = vs.length, bw = Math.min(30, (W - 40) / n - 6);
+  const fav = v => (A.side === 'U' ? v < lg : v > lg) ? 'var(--green)' : 'var(--rose)';
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;color:currentColor" role="img" aria-label="${esc(A.oppAbbr)} allowed, last ${n} games">
+    <line x1="24" x2="${W - 6}" y1="${base}" y2="${base}" stroke="var(--muted)" stroke-width=".5"/>
+    ${vs.map((v, i) => { const cx = 30 + i * ((W - 40) / n) + (W - 40) / n / 2; return `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, base - y(v)).toFixed(1)}" rx="3" fill="${fav(v)}" opacity=".85"/>
+      <text x="${cx.toFixed(1)}" y="${(y(v) - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="currentColor">${fmtN(v)}</text>
+      <text x="${cx.toFixed(1)}" y="${base + 13}" text-anchor="middle" font-size="9" fill="var(--muted)">${gs[i].home ? 'v' : '@'}${esc(String(gs[i].opp).slice(0, 4))}</text>
+      <text x="${cx.toFixed(1)}" y="${base + 24}" text-anchor="middle" font-size="8" fill="var(--muted)">${esc(new Date(gs[i].date).toLocaleDateString([], { month: 'numeric', day: 'numeric' }))}</text>`; }).join('')}
+    <line x1="24" x2="${W - 6}" y1="${y(lg).toFixed(1)}" y2="${y(lg).toFixed(1)}" stroke="var(--sky)" stroke-width="1.3" stroke-dasharray="5 4"/><text x="2" y="${(y(lg) + 3).toFixed(1)}" font-size="9" fill="var(--sky)">lg</text></svg>`;
+}
+function anCompare(A) {
+  const rows = [[`${A.P.playerName} (last 10)`, A.pAvg], [`${A.oppAbbr} allows to ${A.pos ? AN_POS[A.pos] + 's' : 'players'} ${A.qualMin}+ min`, A.qualAvg], ['League avg, same group', A.lg.qual]].filter(x => x[1] !== null);
+  if (!rows.length) return '<div class="xs muted">Insufficient data</div>';
+  const mx = Math.max(...rows.map(x => x[1]), A.dd ? 0 : A.line) * 1.1 || 1;
+  return `<div class="stack" style="gap:.35rem">${rows.map(([k, v], i) => `<div class="xs"><div class="row between"><span>${esc(k)}</span><b class="mono">${A.dd ? pct(v) : anF(v)}</b></div>
+    <div style="height:8px;background:#0f172a;border-radius:4px;overflow:hidden"><div style="width:${(v / mx * 100).toFixed(1)}%;height:100%;background:${i === 0 ? 'var(--sky)' : i === 1 ? (A.side === 'U' ? (v < A.lg.qual ? 'var(--green)' : 'var(--rose)') : (v > A.lg.qual ? 'var(--green)' : 'var(--rose)')) : 'var(--muted)'}"></div></div></div>`).join('')}
+    ${A.dd ? '' : `<div class="xs muted">Line: ${A.side === 'U' ? 'Under' : 'Over'} ${A.line}</div>`}</div>`;
+}
+const anHR = (x, lab) => x.n ? `<div class="xs"><div class="row between"><span>${lab}</span><b class="mono ${x.h / x.n >= 0.6 ? 'green' : x.h / x.n <= 0.4 ? 'rose' : 'amber'}">${x.h}/${x.n} (${Math.round(x.h / x.n * 100)}%)</b></div>
+  <div style="height:6px;background:#0f172a;border-radius:3px;overflow:hidden"><div style="width:${(x.h / x.n * 100).toFixed(0)}%;height:100%;background:${x.h / x.n >= 0.6 ? 'var(--green)' : x.h / x.n <= 0.4 ? 'var(--rose)' : 'var(--amber)'}"></div></div></div>`
+  : `<div class="xs row between"><span>${lab}</span><span class="muted">Insufficient data</span></div>`;
+function anHtml(A) {
+  const st = AN_NAME[A.mm], pn = A.pos ? AN_POS[A.pos] + 's' : 'players', sideTxt = A.dd ? 'Double-double (Yes)' : `${A.side === 'U' ? 'Under' : 'Over'} ${A.line} ${st}`;
+  const mySide = A.over === null ? null : A.side === 'U' ? 100 - A.over : A.over, other = A.over === null ? null : 100 - mySide;
+  const tile = (lab, s) => `<div class="inset" style="padding:.5rem;text-align:center"><div class="xs muted">${lab}</div><div class="xl xb mono ${anCol(s)}">${s ?? '—'}</div><div class="xs ${anCol(s)}">${anLabel(s)}</div></div>`;
+  const trend = A.T.l5 !== null && A.T.season && A.og.length >= 6 ? (d => Math.abs(d) < 0.05 ? '<span class="muted">steady</span>' : d > 0 ? `<span class="${A.side === 'U' ? 'rose' : 'green'}">▲ allowing more lately</span>` : `<span class="${A.side === 'U' ? 'green' : 'rose'}">▼ allowing less lately</span>`)((A.T.l5 - A.T.season) / A.T.season) : '<span class="muted">Insufficient data</span>';
+  const nG = W => Math.min(W, A.og.length);
+  const cell = (v, W) => v === null ? '<span class="muted">—</span>' : `${A.dd ? anF(v, 2) : anF(v)}${W && A.og.length < W ? `<span class="muted"> (${A.og.length}g)</span>` : ''}`;
+  const rk = x => x ? `#${x.r} of ${x.of}` : '<span class="muted">Insufficient data</span>';
+  const fmtD = d => d ? new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric', year: '2-digit' }) : '';
+  return `<div class="stack" style="gap:.7rem">
+    <div class="row between" style="flex-wrap:wrap;gap:.4rem"><div><div class="b">🔍 ${esc(A.P.playerName)} · ${esc(sideTxt)} vs ${esc(A.oppAbbr)}</div>
+      <div class="xs muted">${A.pos ? AN_POS[A.pos] : 'position unknown'} · ${A.og.length} ${esc(A.oppAbbr)} games this season · data through ${A.last ? fmtD(A.last) : '—'} (ESPN box scores)</div></div>
+      <button type="button" class="xs" data-olanclose>Close ✕</button></div>
+    ${A.og.length < 3 ? `<div class="banner bad xs">Insufficient data: only ${A.og.length} ${esc(A.oppAbbr)} box score${A.og.length === 1 ? '' : 's'} loaded this season.</div>` : ''}
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.5rem">
+      ${tile(`Matchup score · ${A.dd ? 'Yes' : A.side === 'U' ? 'Under' : 'Over'} (this bet)`, mySide)}${A.dd ? '' : tile(`Matchup score · ${A.side === 'U' ? 'Over' : 'Under'}`, other)}
+      <div class="inset" style="padding:.5rem;text-align:center"><div class="xs muted">Confidence</div><div class="b ${A.conf === 'High' ? 'green' : A.conf === 'Medium' ? 'amber' : 'rose'}">${A.conf}</div><div class="xs muted">${A.wSum}% of the score's data available</div></div>
+    </div>
+    <div class="xs muted">A matchup score rates how favorable the opponent and situation are for this side (50 = neutral). It is not a win probability.</div>
+    <div class="an-grid">
+      <div class="inset stack" style="gap:.35rem"><div class="xs b sky">Opponent allowance · ${esc(st)} (whole team)</div>
+        <table class="xs"><tbody>
+          <tr><td>Season avg allowed</td><td class="mono">${cell(A.T.season)}</td></tr>
+          <tr><td>Last 5 / 10 / 20</td><td class="mono">${cell(A.T.l5, 5)} · ${cell(A.T.l10, 10)} · ${cell(A.T.l20, 20)}</td></tr>
+          <tr><td>League average</td><td class="mono">${cell(A.lg.team)}</td></tr>
+          <tr><td>Rank (1 = allows fewest)</td><td class="mono">${rk(A.rank.team)}</td></tr>
+          <tr><td>Trend (last 5 vs season)</td><td>${trend}</td></tr></tbody></table>
+        ${anRankBar(A.rank.team, A.side)}</div>
+      <div class="inset stack" style="gap:.35rem"><div class="xs b sky">vs ${esc(pn)} (position-specific)</div>
+        <table class="xs"><tbody>
+          <tr><td>Allowed to all ${esc(pn)} / game</td><td class="mono">${cell(A.PO.season)}</td></tr>
+          <tr><td>Last 5 / 10 / 20</td><td class="mono">${cell(A.PO.l5, 5)} · ${cell(A.PO.l10, 10)} · ${cell(A.PO.l20, 20)}</td></tr>
+          <tr><td>League avg to ${esc(pn)}</td><td class="mono">${cell(A.lg.pos)}</td></tr>
+          <tr><td>Rank vs ${esc(pn)}</td><td class="mono">${rk(A.rank.pos)}</td></tr>
+          <tr><td>Per ${esc(AN_POS[A.pos] || 'player')} with ${A.qualMin}+ min</td><td class="mono">${A.qualAvg === null ? '<span class="muted">Insufficient data</span>' : (A.dd ? pct(A.qualAvg) : anF(A.qualAvg)) + ` <span class="muted">(${A.qN})</span>`}</td></tr></tbody></table>
+        ${anRankBar(A.rank.pos, A.side)}</div>
+      <div class="inset stack" style="gap:.4rem"><div class="xs b sky">${A.dd ? 'Double-double rate' : `${A.side === 'U' ? 'Under' : 'Over'} ${A.line} hit rate`} vs ${esc(A.oppAbbr)}</div>
+        <div class="xs muted">Comparable = ${esc(pn)} who played ${A.qualMin}+ min against them</div>
+        ${anHR(A.oppHit.l5, `Comparable, last ${nG(5)} games`)}${anHR(A.oppHit.l10, `Comparable, last ${nG(10)} games`)}${anHR(A.oppHit.l20, `Comparable, last ${nG(20)} games`)}
+        ${anHR(A.pl10, `${esc(A.P.playerName)}, his last ${A.pl10.n}`)}${anHR(A.plSeason, `${esc(A.P.playerName)}, season`)}</div>
+      <div class="inset stack" style="gap:.35rem"><div class="xs b sky">His average vs what ${esc(A.oppAbbr)} allows</div>${anCompare(A)}</div>
+    </div>
+    <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">${esc(A.oppAbbr)} ${esc(st)} allowed, last ${Math.min(10, A.og.length)} games <span class="muted">(dashed = league avg; green = good for this bet)</span></div>${anTrend(A)}</div>
+    <div class="an-grid">
+      <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">Recent ${esc(pn)} vs ${esc(A.oppAbbr)} (${A.qualMin}+ min)</div>
+        ${A.examples.length ? `<div class="table-wrap"><table class="xs"><thead><tr><th>Date</th><th>Player</th><th>Min</th><th>${A.dd ? 'DD' : esc(st)}</th><th></th></tr></thead><tbody>${A.examples.map(l => `<tr><td class="mono">${fmtD(l.date)}</td><td>${esc(l.name)} <span class="muted">${esc(l.teamAbbr)}</span></td><td class="mono">${Math.round(l.min)}</td><td class="mono">${A.dd ? (l.v ? 'Yes' : 'No') : fmtN(l.v)}</td><td>${l.ok === null ? '<span class="muted">push</span>' : l.ok ? '<span class="green">✓</span>' : '<span class="rose">✗</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="xs muted">Insufficient data</div>'}</div>
+      <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">${esc(A.P.playerName)} vs ${esc(A.oppAbbr)} (last 5 meetings, 3 seasons)</div>
+        ${A.h2hG.length ? `<table class="xs"><thead><tr><th>Date</th><th>Min</th><th>${A.dd ? 'DD' : esc(st)}</th><th></th></tr></thead><tbody>${A.h2hG.map(x => `<tr><td class="mono">${fmtD(x.date)} ${x.home === false ? '@' : ''}</td><td class="mono">${Math.round(x.min)}</td><td class="mono">${A.dd ? (x.v ? 'Yes' : 'No') : fmtN(x.v)}</td><td>${!A.dd && x.v === A.line ? '<span class="muted">push</span>' : (A.side === 'U' ? x.v < A.line : x.v > A.line) ? '<span class="green">✓</span>' : '<span class="rose">✗</span>'}</td></tr>`).join('')}</tbody></table>
+          <div class="xs" style="margin-top:.3rem">Avg <b class="mono">${A.dd ? pct(anAvg(A.h2hG.map(x => x.v))) : anF(anAvg(A.h2hG.map(x => x.v)))}</b> · hit <b class="mono">${A.h2hR.h}/${A.h2hR.n}</b></div>` : '<div class="xs muted">No games against them in the last 3 seasons.</div>'}</div>
+    </div>
+    <div class="inset"><div class="xs b sky" style="margin-bottom:.25rem">Matchup summary</div><div class="xs">${esc(anSummary(A))}</div></div>
+    <details class="xs"><summary class="muted">How the score is built ▾</summary><table class="xs" style="margin-top:.3rem"><tbody>${A.parts.map(p => { const v = p.v === null ? null : A.side === 'U' ? 100 - p.v : p.v; return `<tr><td>${esc(p.k)}</td><td class="mono">${p.w}%</td><td class="mono ${anCol(v)}">${v === null ? 'no data (weight shared out)' : Math.round(v)}</td></tr>`; }).join('')}</tbody></table>
+      <div class="muted" style="margin-top:.25rem">Each part is 0-100 for this side (50 = neutral); missing parts' weights are shared among the rest. Rates are pulled toward 50% when the sample is small. ${A.paceR !== null ? `Pace proxy: ${esc(A.oppAbbr)} games average ${anF(A.paceR * 100, 0)}% of the league's points per game.` : ''} ${A.minR !== null ? `Projected minutes ${anF(A.mrow.mx.min)} vs his ${anF(A.mrow.mx.minSeason)} average.` : ''}</div></details>
+  </div>`;
+}
+function anPaint() {
+  const box = document.querySelector('#olBody .an-box'); if (!box) return;
+  const r = OL.rows.find(x => x.id === AN.open); if (!r) return;
+  const A = AN.res.get(r.id);
+  box.innerHTML = A?.err ? `<div class="xs amber">${esc(A.err)}</div><div style="text-align:right"><button type="button" class="xs" data-olanclose>Close ✕</button></div>`
+    : A ? anHtml(A) : `<div class="xs muted">${esc(AN.msg || `Loading ${r.player}'s matchup…`)}</div><div style="text-align:right"><button type="button" class="xs" data-olanclose>Close ✕</button></div>`;
+}
+async function anOpen(id) {
+  const r = OL.rows.find(x => x.id === id); if (!r) return;
+  AN.open = id; AN.msg = ''; renderOutliers(); $('olBody').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const k = `${id}|${BOX.ver}`; if (AN.res.get(id)?.k === k) return anPaint();
+  AN.res.delete(id);
+  try {
+    const who = anPlayer(r);
+    await Promise.all([anEnsureLeague(), who?.P ? anEnsureLogs(who.P.playerId) : null]);
+    const A = anCompute(r); A.k = `${id}|${BOX.ver}`; AN.res.set(id, A);
+  } catch (e) { AN.res.set(id, { err: `Couldn't load the matchup data (${e.message || 'network'}). Try again.` }); }
+  if (AN.open === id) anPaint();
+}
 function paFromOutlier(o) {
   const mm = o.mm; if (!mm) return null;
   const dd = mm === 'nba_dd'; if (o.side === 'Yes' && !dd) return null;
