@@ -3421,6 +3421,7 @@ async function serverJSON(path, opt) {
 async function serverInit() {
   if (!/^https?:$/.test(location.protocol)) return;
   try { const j = await serverJSON('/api/odds/ping'); if (!j.ok) return; SERVER.on = true; SERVER.proxy = Boolean(j.key); } catch { renderServerPanel(); return; }
+  try { SERVER.aps = Boolean((await serverJSON('/api/apisports/ping')).key); } catch {}
   logReq('server', 'ok', SERVER.proxy ? 'background job + server key active' : 'functions deployed, ODDS_API_KEY not set yet');
   await serverRefresh();
   syncSport(false, true);                      // re-price game lines (from the server snapshot when fresh: no credits)
@@ -3976,6 +3977,50 @@ async function oddsSportsList() {
   const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(`league list HTTP ${r.status}`);
   return r.json();
 }
+// API-Sports (second odds source, via the Netlify function; key APISPORTS_KEY): used for CBA when The Odds API
+// doesn't carry it. Converts its games + decimal odds into the same shape as The Odds API's game lines.
+async function apsGet(path, params) {
+  const j = await serverJSON(`/api/apisports/${path}?${new URLSearchParams(params)}`);
+  const errs = j.errors && (Array.isArray(j.errors) ? j.errors : Object.values(j.errors));
+  if (errs && errs.length) throw new Error(`API-Sports: ${errs.join('; ')}`);
+  return j;
+}
+const decToAm = d => { d = +d; if (!(d > 1.0001)) return null; return d >= 2 ? Math.round((d - 1) * 100) : Math.round(-100 / (d - 1)); };
+async function apsCBA() {
+  const lj = await apsGet('leagues', { country: 'China' });
+  const lg = (lj.response || []).find(l => /^cba$|chinese basketball association/i.test(l.name || ''));
+  if (!lg) throw new Error(`API-Sports doesn't list the CBA (China leagues: ${(lj.response || []).map(l => l.name).join(', ') || 'none'}).`);
+  const season = (lg.seasons || []).map(x => String(x.season)).sort().pop();
+  const gj = await apsGet('games', { league: lg.id, season, timezone: 'UTC' });
+  const games = new Map((gj.response || []).map(g => [g.id, g])), now = Date.now(), list = [];
+  let page = 1, total = 1;
+  do {
+    const oj = await apsGet('odds', { league: lg.id, season, ...(page > 1 ? { page } : {}) });
+    total = oj.paging?.total || 1;
+    for (const o of oj.response || []) {
+      const g = games.get(o.game?.id); if (!g) continue;
+      const start = Date.parse(g.date); if (!(start > now)) continue;
+      const H = g.teams?.home?.name, A = g.teams?.away?.name; if (!H || !A) continue;
+      const bookmakers = (o.bookmakers || []).map(b => {
+        const markets = [];
+        for (const bet of b.bets || []) {
+          if (/^home\/away$/i.test(bet.name)) {
+            const h = (bet.values || []).find(v => /^home$/i.test(v.value)), a = (bet.values || []).find(v => /^away$/i.test(v.value));
+            if (h && a && decToAm(h.odd) && decToAm(a.odd)) markets.push({ key: 'h2h', outcomes: [{ name: H, price: decToAm(h.odd) }, { name: A, price: decToAm(a.odd) }] });
+          } else if (/^over\/under$/i.test(bet.name)) {
+            const by = new Map();
+            for (const v of bet.values || []) { const m = String(v.value).match(/^(over|under)\s+([\d.]+)/i); if (!m || !decToAm(v.odd)) continue; const pt = +m[2]; if (!by.has(pt)) by.set(pt, {}); by.get(pt)[m[1].toLowerCase()] = decToAm(v.odd); }
+            for (const [pt, x] of by) if (x.over && x.under) markets.push({ key: 'totals', outcomes: [{ name: 'Over', price: x.over, point: pt }, { name: 'Under', price: x.under, point: pt }] });
+          }
+        }
+        return { key: String(b.name || b.id).toLowerCase().replace(/[^a-z0-9]/g, ''), title: b.name || String(b.id), last_update: null, markets };
+      }).filter(b => b.markets.length);
+      if (bookmakers.length) list.push({ id: `aps${g.id}`, home_team: H, away_team: A, commence_time: new Date(start).toISOString(), bookmakers });
+    }
+    page++;
+  } while (page <= Math.min(total, 3));
+  return { list, season, name: lg.name };
+}
 async function booksOnlyKey(sp) {
   const c = STORE.boKeys?.[sp];
   if (c && Date.now() - c.t < 12 * 3600e3) { if (c.key) GL_KEYS[sp] = c.key; return c; }
@@ -4190,18 +4235,23 @@ function gloCompute(sport, c) {
 }
 async function gloScan(force = false) {
   const sport = STORE.glo.tab; if (GLO.busy) return;
-  if (!hasOdds() && !SERVER.on) { GLO.err = 'Add your Odds API key (or turn on the background job) first.'; renderGLO(); return; }
+  if (!hasOdds() && !SERVER.on) { GLO.err = 'Add your Odds API key (or turn on the background job) first.'; renderGLO(); return; }   // (CBA via API-Sports needs the server too)
   GLO.busy = true; GLO.err = ''; renderGLO();
   try {
+    let c = null;
     if (BOOKS_ONLY[sport]) {
-      const k = await booksOnlyKey(sport);
-      if (!k.key) throw new Error(`The odds feed doesn't carry the ${BOOKS_ONLY[sport].name} right now, so there are no prices to compare. Basketball leagues it has: ${k.bball.join(', ') || 'none listed'}. The app checks again every 12 hours.`);
-      if (!k.active) throw new Error(`The odds feed lists ${k.title} but it's out of season right now (no games posted).`);
+      const k = hasOdds() ? await booksOnlyKey(sport).catch(() => ({ key: null, bball: [] })) : { key: null, bball: [] };
+      if (!k.key) {
+        if (!SERVER.aps) throw new Error(`The Odds API doesn't carry the ${BOOKS_ONLY[sport].name}${k.bball?.length ? ` (its basketball leagues: ${k.bball.join(', ')})` : ''}. ${SERVER.on ? 'Add APISPORTS_KEY in Netlify (then redeploy) to use API-Sports for CBA odds.' : 'CBA odds come from API-Sports through the background server, which needs the GitHub deploy.'}`);
+        const cc = GL.data[sport];
+        if (!force && cc?.src === 'API-Sports' && Date.now() - cc.t < 30 * 60e3) c = cc;
+        else { const r = await apsCBA(); c = GL.data[sport] = { t: Date.now(), list: r.list, src: 'API-Sports', note: `${r.name} ${r.season}` }; }
+      } else if (!k.active) throw new Error(`The odds feed lists ${k.title} but it's out of season right now (no games posted).`);
     }
-    const c = await glFetch(sport, force);
+    if (!c) c = await glFetch(sport, force);
     if (!c) throw new Error('No game lines available yet.');
     GLO.rows = GLO.rows.filter(r => r.sport !== sport).concat(gloCompute(sport, c));
-    GLO.msg[sport] = { t: c.t, server: c.server, n: (c.list || []).filter(e => Date.parse(e.commence_time) > Date.now()).length };
+    GLO.msg[sport] = { t: c.t, server: c.server, src: c.src, n: (c.list || []).filter(e => Date.parse(e.commence_time) > Date.now()).length };
   } catch (e) { GLO.err = e.message; }
   GLO.busy = false; renderGLO();
 }
@@ -4229,7 +4279,7 @@ function renderGLO() {
   const sk = g.sort || 'ev', sv = r => sk === 'model' ? r.modelP : sk === 'fair' ? r.p : r.ev;
   const rows = base.filter(r => !(o.hideStale && r.stale)).sort((a, b) => ((sv(b) ?? -Infinity) - (sv(a) ?? -Infinity)) || b.ev - a.ev).slice(0, 120);
   $('gloStatus').innerHTML = (GLO.err ? `<div class="banner bad">${esc(GLO.err)}</div>` : '') + (m
-    ? `${spLabel(sport)}: ${m.n} games · lines from ${m.server ? 'the background job' : 'the books'} at ${hhmm(m.t)}${m.server ? ' (no credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
+    ? `${spLabel(sport)}: ${m.n} games · lines from ${m.server ? 'the background job' : m.src ? `${m.src} (international books, decimal odds converted)` : 'the books'} at ${hhmm(m.t)}${m.server || m.src ? ' (no Odds API credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
     : `<span class="muted">Press Load to price ${sport} ${isSoc(sport) || BOOKS_ONLY[sport] ? 'moneylines and over/unders' : `moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals`}. About 3 credits, or free if the lines were downloaded in the last 30 min.</span>`);
   if (!m) { $('gloBody').innerHTML = ''; return; }
   if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline, spread or total outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
