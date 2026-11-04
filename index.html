@@ -2045,6 +2045,23 @@ function parseBox(sport, d) {
     }
     for (const blk of d.boxscore?.players || []) { const tid = String(blk.team?.id || ''); if (!B.fs[tid]) continue; const ids = new Set(); for (const st of blk.statistics || []) for (const a of st.athletes || []) if (a.starter && a.athlete?.id) ids.add(String(a.athlete.id)); B.fs[tid].starters = [...ids]; }
   }
+  if (sport === 'NFL') {   // every player's line: [id, name, teamId, pos, att, cmp, passYds, passTD, int, car, rushYds, rushTD, rec, recYds, recTD, tgt] (🔍 Analyze)
+    const M = new Map();
+    for (const blk of d.boxscore?.players || []) {
+      const tid = String(blk.team?.id || '');
+      for (const st of blk.statistics || []) {
+        const nm = String(st.name || st.text || '').toLowerCase();
+        for (const a of st.athletes || []) {
+          const id = String(a.athlete?.id || ''); if (!id || !a.stats?.length) continue;
+          const L = M.get(id) || [id, a.athlete.displayName || '', tid, String(a.athlete.position?.abbreviation || ''), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; M.set(id, L);
+          if (/passing/.test(nm)) { const i = boxIdx(st, ['completions/passingAttempts'], ['C/ATT']); L[5] += cellN(a, i, 0); L[4] += cellN(a, i, 1); L[6] += cellN(a, boxIdx(st, ['passingYards'], ['YDS'])); L[7] += cellN(a, boxIdx(st, ['passingTouchdowns'], ['TD'])); L[8] += cellN(a, boxIdx(st, ['interceptions'], ['INT'])); }
+          else if (/rushing/.test(nm)) { L[9] += cellN(a, boxIdx(st, ['rushingAttempts'], ['CAR'])); L[10] += cellN(a, boxIdx(st, ['rushingYards'], ['YDS'])); L[11] += cellN(a, boxIdx(st, ['rushingTouchdowns'], ['TD'])); }
+          else if (/receiving/.test(nm)) { L[12] += cellN(a, boxIdx(st, ['receptions'], ['REC'])); L[13] += cellN(a, boxIdx(st, ['receivingYards'], ['YDS'])); L[14] += cellN(a, boxIdx(st, ['receivingTouchdowns'], ['TD'])); L[15] += cellN(a, boxIdx(st, ['receivingTargets'], ['TGTS'])); }
+        }
+      }
+    }
+    B.pl = [...M.values()].filter(L => L[4] + L[9] + L[12] + L[15] > 0);
+  }
   for (const ts of d.boxscore?.teams || []) {
     const id = String(ts.team?.id || ''), f = ts.statistics?.find(x => x.name === 'fouls'), ft = ts.statistics?.find(x => /freeThrowsMade-freeThrowsAttempted/.test(x.name || ''));
     if (f) B.fouls[id] = num(f.displayValue); if (ft) B.fta[id] = num(String(ft.displayValue).split('-')[1]);
@@ -2081,7 +2098,7 @@ function parseBox(sport, d) {
 async function ensureBoxes(events, perTeam = 6) {
   const sport = events[0]?.sport; if (!['NBA', 'NFL', 'NHL'].includes(sport) || BOX.busy) return 0;
   const c = boxCache(), want = new Set();
-  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && (!c[`${sport}:${g.id}`] || (sport === 'NBA' && (c[`${sport}:${g.id}`].tip === undefined || c[`${sport}:${g.id}`].fs === undefined || c[`${sport}:${g.id}`].pl === undefined)))) want.add(g.id);
+  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && (!c[`${sport}:${g.id}`] || ((sport === 'NFL' && c[`${sport}:${g.id}`].pl === undefined) || sport === 'NBA' && (c[`${sport}:${g.id}`].tip === undefined || c[`${sport}:${g.id}`].fs === undefined || c[`${sport}:${g.id}`].pl === undefined)))) want.add(g.id);
   if (!want.size) return 0;
   BOX.busy = true;
   const queue = [...want]; let n = 0;
@@ -4943,87 +4960,142 @@ document.addEventListener('click', e => {
 });
 // the same analysis for a prop outlier card: model row + this season's game log, slider starts at the card's line
 /* =====================================================================
-   🔍 ANALYZE — opponent defensive matchup for one NBA prop (Prop outliers cards)
+   🔍 ANALYZE — opponent defensive matchup for one prop (Prop outliers cards; NBA + NFL)
    Everything comes from this season's ESPN box scores (every player's line in every game) and the
    player's ESPN game logs. Nothing is estimated from betting lines. Metrics with too few games say so.
    ===================================================================== */
 const AN = { open: null, busy: false, msg: '', h2h: {}, res: new Map() };
-const AN_MKT = { nba_pts: ['pts'], nba_reb: ['reb'], nba_ast: ['ast'], nba_3pm: ['tpm'], nba_blk: ['blk'], nba_stl: ['stl'], nba_pra: ['pts', 'reb', 'ast'], nba_pr: ['pts', 'reb'], nba_pa: ['pts', 'ast'], nba_ra: ['reb', 'ast'] };
-const AN_NAME = { nba_pts: 'points', nba_reb: 'rebounds', nba_ast: 'assists', nba_3pm: 'threes', nba_blk: 'blocks', nba_stl: 'steals', nba_pra: 'pts+reb+ast', nba_pr: 'pts+reb', nba_pa: 'pts+ast', nba_ra: 'reb+ast', nba_dd: 'double-doubles' };
-const AN_POS = { G: 'guard', F: 'forward', C: 'center' };
-const anOK = r => r.sport === 'NBA' && (AN_MKT[r.mm] || r.mm === 'nba_dd') && (r.side !== 'Yes' || r.mm === 'nba_dd');
-// a box line → {min, pts, reb, ast, tpm, blk, stl}
-const anLine = a => ({ id: a[0], name: a[1], team: a[2], pos: a[3], min: a[4], pts: a[5], reb: a[6], ast: a[7], tpm: a[8], blk: a[9], stl: a[10], st: a[11] });
-// the prop's stat from a line; double-double = two of PTS/REB/AST/BLK/STL at 10+ (1 or 0)
-const anVal = (l, mm) => mm === 'nba_dd' ? (['pts', 'reb', 'ast', 'blk', 'stl'].filter(k => (l[k] || 0) >= 10).length >= 2 ? 1 : 0) : AN_MKT[mm] ? AN_MKT[mm].reduce((a, k) => a + (l[k] || 0), 0) : null;
-const anSeasonStart = () => { const n = new Date(), yr = n.getMonth() < 8 ? n.getFullYear() - 1 : n.getFullYear(); return new Date(yr, 9, 1); };
+const AN_SP = {
+  NBA: {
+    mkt: { nba_pts: ['pts'], nba_reb: ['reb'], nba_ast: ['ast'], nba_3pm: ['tpm'], nba_blk: ['blk'], nba_stl: ['stl'], nba_pra: ['pts', 'reb', 'ast'], nba_pr: ['pts', 'reb'], nba_pa: ['pts', 'ast'], nba_ra: ['reb', 'ast'] },
+    bin: { nba_dd: l => ['pts', 'reb', 'ast', 'blk', 'stl'].filter(k => (l[k] || 0) >= 10).length >= 2 ? 1 : 0 },
+    name: { nba_pts: 'points', nba_reb: 'rebounds', nba_ast: 'assists', nba_3pm: 'threes', nba_blk: 'blocks', nba_stl: 'steals', nba_pra: 'pts+reb+ast', nba_pr: 'pts+reb', nba_pa: 'pts+ast', nba_ra: 'reb+ast', nba_dd: 'double-doubles' },
+    binTxt: { nba_dd: 'double-double' },
+    pos: { G: 'guard', F: 'forward', C: 'center' },
+    line: a => ({ id: a[0], name: a[1], team: a[2], pos: a[3], min: a[4], pts: a[5], reb: a[6], ast: a[7], tpm: a[8], blk: a[9], stl: a[10], st: a[11] }),
+    log: g => ({ min: statFrom(g.names, g.stats, ['minutes']) ?? 0, pts: statFrom(g.names, g.stats, LOG_STATS.nba_pts) ?? 0, reb: statFrom(g.names, g.stats, LOG_STATS.nba_reb) ?? 0, ast: statFrom(g.names, g.stats, LOG_STATS.nba_ast) ?? 0,
+      tpm: statFrom(g.names, g.stats, LOG_STATS.nba_3pm) ?? 0, blk: statFrom(g.names, g.stats, LOG_STATS.nba_blk) ?? 0, stl: statFrom(g.names, g.stats, LOG_STATS.nba_stl) ?? 0 }),
+    played: l => l.min > 0,
+    vol: () => ({ f: l => l.min, lab: 'min', k: 0.75, floor: 15 }),
+    start: () => { const n = new Date(), yr = n.getMonth() < 8 ? n.getFullYear() - 1 : n.getFullYear(); return new Date(yr, 9, 1); },
+    logSeason: d => d.getFullYear() + 1,   // ESPN names NBA seasons by the year they end
+    alpha: mm => mm === 'nba_dd' ? 0.6 : anAvg(AN_SP.NBA.mkt[mm].map(k => ({ pts: 1, reb: 0.5, ast: 0.8, tpm: 1, blk: 0.3, stl: 0.5 })[k])),
+    envLab: 'Minutes, pace & environment'
+  },
+  NFL: {
+    mkt: { pass_yds: ['pyd'], pass_td: ['ptd'], pass_int: ['int'], pass_cmp: ['cmp'], pass_att: ['att'], rush_yds: ['ryd'], rush_att: ['car'], rec: ['rec'], rec_yds: ['cyd'], rush_rec_yds: ['ryd', 'cyd'] },
+    bin: { anytime_td: l => (l.rtd || 0) + (l.ctd || 0) > 0 ? 1 : 0 },
+    name: { pass_yds: 'passing yards', pass_td: 'passing TDs', pass_int: 'interceptions', pass_cmp: 'completions', pass_att: 'pass attempts', rush_yds: 'rushing yards', rush_att: 'carries', rec: 'receptions', rec_yds: 'receiving yards', rush_rec_yds: 'rush+rec yards', anytime_td: 'TD scorers' },
+    binTxt: { anytime_td: 'touchdown' },
+    pos: { QB: 'quarterback', RB: 'running back', WR: 'wide receiver', TE: 'tight end' },
+    line: a => ({ id: a[0], name: a[1], team: a[2], pos: a[3], att: a[4], cmp: a[5], pyd: a[6], ptd: a[7], int: a[8], car: a[9], ryd: a[10], rtd: a[11], rec: a[12], cyd: a[13], ctd: a[14], tgt: a[15] }),
+    log: g => { const f = k => statFrom(g.names, g.stats, [k]) ?? 0;
+      return { att: f('passingAttempts'), cmp: f('completions'), pyd: f('passingYards'), ptd: f('passingTouchdowns'), int: f('interceptions'), car: f('rushingAttempts'), ryd: f('rushingYards'), rtd: f('rushingTouchdowns'),
+        rec: f('receptions'), cyd: f('receivingYards'), ctd: f('receivingTouchdowns'), tgt: f('receivingTargets') }; },
+    played: l => l.att + l.car + l.rec + l.tgt > 0,
+    // "comparable" = same position with a similar workload for this market
+    vol: mm => /^pass/.test(mm) ? { f: l => l.att, lab: 'pass att', k: 0.6, floor: 15 } : /^rush_(yds|att)$/.test(mm) ? { f: l => l.car, lab: 'carries', k: 0.6, floor: 5 }
+      : mm === 'rec' || mm === 'rec_yds' ? { f: l => l.tgt || l.rec, lab: 'targets', k: 0.6, floor: 3 } : { f: l => l.car + (l.tgt || l.rec), lab: 'touches', k: 0.6, floor: 4 },
+    start: () => { const n = new Date(), yr = n.getMonth() < 6 ? n.getFullYear() - 1 : n.getFullYear(); return new Date(yr, 7, 20); },
+    logSeason: d => d.getFullYear(),      // NFL seasons are named by the year they start
+    alpha: mm => mm === 'pass_int' ? 0.3 : /att|cmp|^rec$/.test(mm) ? 0.5 : 0.9,
+    envLab: 'Pace & scoring environment'
+  }
+};
+const anOK = r => AN_SP[r.sport] && (AN_SP[r.sport].mkt[r.mm] || AN_SP[r.sport].bin[r.mm]) && (r.side !== 'Yes' || AN_SP[r.sport].bin[r.mm]);
+const anVal = (sp, l, mm) => { const C = AN_SP[sp]; return C.bin[mm] ? C.bin[mm](l) : C.mkt[mm] ? C.mkt[mm].reduce((a, k) => a + (l[k] || 0), 0) : null; };
 const anAvg = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
-// a team's finished games this season (newest first) with box lines: { date, opp abbr, against: lines of the players it faced, total }
-function anGames(tid) {
-  const c = boxCache(), t0 = anSeasonStart().getTime(), out = [];
-  for (const g of teamGames('NBA', tid)) {
+// NFL box scores don't list positions: map player id → QB/RB/WR/TE from every team's roster (cached 3 days)
+const ANPOS_KEY = 'apexquant.nflpos';
+async function anNflPositions(teams) {
+  let c = null; try { c = JSON.parse(localStorage.getItem(ANPOS_KEY) || 'null'); } catch {}
+  if (c && Date.now() - c.t < 3 * 864e5 && Object.keys(c.m || {}).length > 500) return (AN.nflPos = c.m);
+  const m = {}, q = [...teams];
+  await Promise.all(Array.from({ length: 6 }, async () => { while (q.length) { const tid = q.shift(); try {
+    const d = await fetchJson(urlFor('NFL', `teams/${tid}/roster`), 12000, 0);
+    for (const e of d.athletes || []) for (const a of (Array.isArray(e.items) ? e.items : [e])) { const g = positionGroup('NFL', a.position?.abbreviation); if (a.id && ['QB', 'RB', 'WR', 'TE'].includes(g)) m[String(a.id)] = g; }
+  } catch {} } }));
+  for (const r of REG.players.values()) if (r.sport === 'NFL' && ['QB', 'RB', 'WR', 'TE'].includes(r.group)) m[r.playerId] = r.group;
+  try { localStorage.setItem(ANPOS_KEY, JSON.stringify({ t: Date.now(), m })); } catch {}
+  return (AN.nflPos = m);
+}
+function anPosOf(sp, l) {
+  if (sp !== 'NFL') return l.pos;
+  const m = AN.nflPos || {};
+  if (m[l.id]) return m[l.id];
+  const g = positionGroup('NFL', l.pos); if (['QB', 'RB', 'WR', 'TE'].includes(g)) return g;
+  return l.att >= 5 ? 'QB' : l.car > (l.tgt || l.rec) ? 'RB' : (l.tgt || l.rec) > 0 ? 'WR' : '';
+}
+// a team's finished games this season (newest first): { date, opp abbr, against: lines of the players it faced, total points }
+function anGames(sp, tid) {
+  const c = boxCache(), t0 = AN_SP[sp].start().getTime(), out = [];
+  for (const g of teamGames(sp, tid)) {
     if (new Date(g.date).getTime() < t0) continue;
-    const b = c[`NBA:${g.id}`]; if (!b?.pl?.length) continue;
-    out.push({ id: g.id, date: g.date, opp: g.opp, home: g.home, total: g.pf + g.pa, against: b.pl.filter(a => a[2] !== String(tid)).map(anLine) });
+    const b = c[`${sp}:${g.id}`]; if (!b?.pl?.length) continue;
+    out.push({ id: g.id, date: g.date, opp: g.opp, home: g.home, total: g.pf + g.pa, against: b.pl.filter(a => a[2] !== String(tid)).map(a => { const l = AN_SP[sp].line(a); l.pos = anPosOf(sp, l); return l; }) });
   }
   return out;
 }
-const anTeams = () => { const ids = new Set(), t0 = anSeasonStart().getTime(); for (const [k, evs] of Object.entries(resultsCache())) if (k.startsWith('NBA:')) for (const ev of evs || []) { if (ev.season?.type === 1 || new Date(ev.date).getTime() < t0) continue; for (const c of ev.competitions?.[0]?.competitors || []) if (c.team?.id) ids.add(String(c.team.id)); } return [...ids]; };
-// box scores of every team's last 20 games (once; afterwards only new games are fetched)
-async function anEnsureLeague() {
-  await seasonResultEvents('NBA');
-  const c = boxCache(), t0 = anSeasonStart().getTime(), want = new Set();
-  for (const tid of anTeams()) for (const g of teamGames('NBA', tid).filter(g => new Date(g.date).getTime() >= t0).slice(0, 20)) if (!c[`NBA:${g.id}`]?.pl) want.add(g.id);
+const anTeams = sp => { const ids = new Set(), t0 = AN_SP[sp].start().getTime(); for (const [k, evs] of Object.entries(resultsCache())) if (k.startsWith(sp + ':')) for (const ev of evs || []) { if (ev.season?.type === 1 || new Date(ev.date).getTime() < t0) continue; for (const c of ev.competitions?.[0]?.competitors || []) if (c.team?.id) ids.add(String(c.team.id)); } return [...ids]; };
+// box scores of every team's last 20 games this season (once; afterwards only new games are fetched)
+async function anEnsureLeague(sp) {
+  await seasonResultEvents(sp);
+  const teams = anTeams(sp);
+  const posJob = sp === 'NFL' ? anNflPositions(teams) : null;
+  const c = boxCache(), t0 = AN_SP[sp].start().getTime(), want = new Set();
+  for (const tid of teams) for (const g of teamGames(sp, tid).filter(g => new Date(g.date).getTime() >= t0).slice(0, 20)) if (!c[`${sp}:${g.id}`]?.pl) want.add(g.id);
   const total = want.size, queue = [...want]; let done = 0, n = 0;
   if (total) {
-    const tick = () => { AN.msg = `Loading this season's box scores from ESPN: ${done}/${total} games (first time only)…`; anPaint(); };
+    const tick = () => { AN.msg = `Loading this season's ${sp} box scores from ESPN: ${done}/${total} games (first time only)…`; anPaint(); };
     tick();
-    await Promise.all(Array.from({ length: 6 }, async () => { while (queue.length) { const id = queue.shift(); try { const b = parseBox('NBA', await fetchJson(urlFor('NBA', `summary?event=${id}`), 15000, 0)); if (b) { c[`NBA:${id}`] = b; n++; } } catch {} done++; if (done % 5 === 0) tick(); } }));
+    await Promise.all(Array.from({ length: 6 }, async () => { while (queue.length) { const id = queue.shift(); try { const b = parseBox(sp, await fetchJson(urlFor(sp, `summary?event=${id}`), 15000, 0)); if (b) { c[`${sp}:${id}`] = b; n++; } } catch {} done++; if (done % 5 === 0) tick(); } }));
     if (n) saveBox();
   }
+  await posJob;
   return n;
 }
 // the player's game logs: this season + the 2 before (for head-to-head)
-async function anEnsureLogs(pid) {
-  if (!REG.logs[`NBA:${pid}`]) await fetchGamelog('NBA', pid).catch(() => { REG.logs[`NBA:${pid}`] = { t: Date.now(), games: [] }; });
-  if (AN.h2h[pid]) return;
-  const yr = anSeasonStart().getFullYear() + 1, past = [];
-  for (const s of [yr - 1, yr - 2]) { try { past.push(...parseGamelog(await fetchJson(`https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${pid}/gamelog?season=${s}`, 10000, 0))); } catch {} }
-  AN.h2h[pid] = past;
+async function anEnsureLogs(sp, pid) {
+  if (!REG.logs[`${sp}:${pid}`]) await fetchGamelog(sp, pid).catch(() => { REG.logs[`${sp}:${pid}`] = { t: Date.now(), games: [] }; });
+  const k = `${sp}:${pid}`; if (AN.h2h[k]) return;
+  const cfg = SPORTS[sp], yr = AN_SP[sp].logSeason(AN_SP[sp].start()), past = [];
+  for (const y of [yr - 1, yr - 2]) { try { past.push(...parseGamelog(await fetchJson(`https://site.web.api.espn.com/apis/common/v3/sports/${cfg.sport}/${cfg.league}/athletes/${pid}/gamelog?season=${y}`, 10000, 0))); } catch {} }
+  AN.h2h[k] = past;
 }
-const anLogLine = g => ({ min: statFrom(g.names, g.stats, ['minutes']) ?? 0, pts: statFrom(g.names, g.stats, LOG_STATS.nba_pts) ?? 0, reb: statFrom(g.names, g.stats, LOG_STATS.nba_reb) ?? 0, ast: statFrom(g.names, g.stats, LOG_STATS.nba_ast) ?? 0,
-  tpm: statFrom(g.names, g.stats, LOG_STATS.nba_3pm) ?? 0, blk: statFrom(g.names, g.stats, LOG_STATS.nba_blk) ?? 0, stl: statFrom(g.names, g.stats, LOG_STATS.nba_stl) ?? 0 });
 function anPlayer(r) {
-  let P = null;
-  if (r.pid) P = [...REG.players.values()].find(p => p.sport === 'NBA' && p.playerId === String(r.pid));
-  if (!P) P = fsResolver([...REG.players.values()].filter(p => p.sport === 'NBA').map(p => ({ name: p.playerName, value: p })))(r.player);
+  const sp = r.sport; let P = null;
+  if (r.pid) P = [...REG.players.values()].find(p => p.sport === sp && p.playerId === String(r.pid));
+  if (!P) P = fsResolver([...REG.players.values()].filter(p => p.sport === sp).map(p => ({ name: p.playerName, value: p })))(r.player);
   if (!P) return null;
   const start = new Date(r.start).getTime();
-  const ev = [...REG.events.values()].filter(e => e.sport === 'NBA' && (String(e.awayTeamId) === String(P.teamId) || String(e.homeTeamId) === String(P.teamId)))
+  const ev = [...REG.events.values()].filter(e => e.sport === sp && (String(e.awayTeamId) === String(P.teamId) || String(e.homeTeamId) === String(P.teamId)))
     .sort((a, b) => Math.abs(new Date(a.start) - start) - Math.abs(new Date(b.start) - start))[0];
   if (!ev) return { P };
   const home = String(ev.homeTeamId) === String(P.teamId);
   return { P, ev, oppId: String(home ? ev.awayTeamId : ev.homeTeamId), oppAbbr: home ? ev.awayAbbr : ev.homeAbbr, home };
 }
 function anCompute(r) {
-  const who = anPlayer(r); if (!who?.ev) return { err: who ? `Couldn't find ${r.player}'s game on the NBA schedule.` : `Couldn't find ${r.player} on a loaded NBA roster (pick NBA at the top once, then come back).` };
-  const { P, ev, oppId, oppAbbr } = who, mm = r.mm, dd = mm === 'nba_dd', side = dd ? 'O' : r.side, line = dd ? 0.5 : r.line;
-  const hit = v => side === 'U' ? v < line : v > line, graded = v => dd || v !== line;
+  const sp = r.sport, C = AN_SP[sp];
+  const who = anPlayer(r); if (!who?.ev) return { err: who ? `Couldn't find ${r.player}'s game on the ${sp} schedule.` : `Couldn't find ${r.player} on a loaded ${sp} roster (pick ${sp} at the top once, then come back).` };
+  const { P, ev, oppId, oppAbbr } = who, mm = r.mm, bin = Boolean(C.bin[mm]), side = bin ? 'O' : r.side, line = bin ? 0.5 : r.line;
+  const val = l => anVal(sp, l, mm);
+  const hit = v => side === 'U' ? v < line : v > line, graded = v => bin || v !== line;
   const rate = xs => { const g = xs.filter(graded); return { h: g.filter(hit).length, n: g.length }; };
+  const V = C.vol(mm);
   // the player: this season's log
-  const mine = (REG.logs[`NBA:${P.playerId}`]?.games || []).map(g => ({ g, l: anLogLine(g) })).filter(x => x.l.min > 0);
-  const vals = mine.map(x => anVal(x.l, mm));
-  const avgMin = anAvg(mine.slice(0, 10).map(x => x.l.min));
-  let pos = ['G', 'F', 'C'].includes(P.group) ? P.group : null;
-  const qualMin = avgMin ? Math.round(Math.max(15, 0.75 * avgMin)) : 20;
+  const mine = (REG.logs[`${sp}:${P.playerId}`]?.games || []).map(g => ({ g, l: C.log(g) })).filter(x => C.played(x.l));
+  const vals = mine.map(x => val(x.l));
+  const avgVol = mine.length ? anAvg(mine.slice(0, 10).map(x => V.f(x.l))) : null;
+  const qualVol = avgVol ? Math.max(V.floor, Math.round(V.k * avgVol)) : V.floor;
+  let pos = C.pos[P.group] ? P.group : sp === 'NFL' ? (AN.nflPos || {})[P.playerId] || null : null;
+  if (!pos) { for (const b of Object.values(boxCache())) { const a = b.pl?.find(x => x[0] === P.playerId); if (a) { const l = C.line(a); const g = anPosOf(sp, l); if (C.pos[g]) { pos = g; break; } } } }
   // opponent + league from box scores
-  const og = anGames(oppId);
-  if (!pos) { const c = boxCache(); for (const b of Object.values(c)) { const a = b.pl?.find(x => x[0] === P.playerId); if (a?.[3]) { pos = a[3]; break; } } }
-  const perGame = (games, f) => games.map(gm => gm.against.filter(f).reduce((a, l) => a + anVal(l, mm), 0));
-  const isPos = l => l.pos === pos, isQual = l => l.pos === pos && l.min >= qualMin;
-  const league = anTeams().map(tid => { const gs = anGames(tid); if (gs.length < 3) return null;
+  const og = anGames(sp, oppId);
+  const perGame = (games, f) => games.map(gm => gm.against.filter(f).reduce((a, l) => a + val(l), 0));
+  const isPos = l => l.pos === pos, isQual = l => l.pos === pos && V.f(l) >= qualVol;
+  const league = anTeams(sp).map(tid => { const gs = anGames(sp, tid); if (gs.length < 3) return null;
     const q = gs.flatMap(gm => gm.against.filter(isQual));
-    return { tid, n: gs.length, team: anAvg(perGame(gs, () => true)), pos: pos ? anAvg(perGame(gs, isPos)) : null, qual: q.length ? anAvg(q.map(l => anVal(l, mm))) : null, qn: q.length, total: anAvg(gs.map(g => g.total)) }; }).filter(Boolean);
+    return { tid, n: gs.length, team: anAvg(perGame(gs, () => true)), pos: pos ? anAvg(perGame(gs, isPos)) : null, qual: q.length ? anAvg(q.map(val)) : null, qn: q.length, total: anAvg(gs.map(g => g.total)) }; }).filter(Boolean);
   const lgAvg = k => anAvg(league.map(t => t[k]).filter(v => v !== null));
   const rankOf = (k, v) => { const xs = league.map(t => t[k]).filter(x => x !== null).sort((a, b) => a - b); return v === null || !xs.length ? null : { r: xs.filter(x => x < v - 1e-9).length + 1, of: xs.length }; };   // 1 = allows the least
   const win = (gs, W) => gs.slice(0, W);
@@ -5031,66 +5103,64 @@ function anCompute(r) {
   for (const W of [5, 10, 20]) T['l' + W] = og.length ? anAvg(perGame(win(og, W), () => true)) : null;
   const PO = { season: pos && og.length ? anAvg(perGame(og, isPos)) : null };
   for (const W of [5, 10, 20]) PO['l' + W] = pos && og.length ? anAvg(perGame(win(og, W), isPos)) : null;
-  const qAll = og.flatMap(gm => gm.against.filter(isQual).map(l => ({ ...l, date: gm.date, teamAbbr: gm.opp, v: anVal(l, mm) })));
+  const qAll = og.flatMap(gm => gm.against.filter(isQual).map(l => ({ ...l, date: gm.date, teamAbbr: gm.opp, vol: V.f(l), v: val(l) })));
   const qualAvg = qAll.length ? anAvg(qAll.map(l => l.v)) : null;
-  const oppHit = {}; for (const W of [5, 10, 20]) oppHit['l' + W] = rate(win(og, W).flatMap(gm => gm.against.filter(isQual).map(l => anVal(l, mm))));
+  const oppHit = {}; for (const W of [5, 10, 20]) oppHit['l' + W] = rate(win(og, W).flatMap(gm => gm.against.filter(isQual).map(val)));
   const examples = qAll.slice(0, 10).map(l => ({ ...l, ok: graded(l.v) ? hit(l.v) : null }));
   // head-to-head (this season + 2 before)
-  const h2hG = [...(REG.logs[`NBA:${P.playerId}`]?.games || []), ...(AN.h2h[P.playerId] || [])].filter(g => g.oppId === oppId).map(g => ({ g, l: anLogLine(g) })).filter(x => x.l.min > 0)
-    .sort((a, b) => String(b.g.date).localeCompare(String(a.g.date))).slice(0, 5).map(x => ({ date: x.g.date, home: x.g.home, v: anVal(x.l, mm), min: x.l.min }));
-  // environment: pace proxy (points in the opponent's games vs league) × his projected minutes vs his average
-  const sim = APP.simCache.get(`NBA:${ev.eventId}`), mrow = sim ? [...(sim.players || [])].find(p => String(p.playerId) === P.playerId && p.mx) : null;
+  const h2hG = [...(REG.logs[`${sp}:${P.playerId}`]?.games || []), ...(AN.h2h[`${sp}:${P.playerId}`] || [])].filter(g => g.oppId === oppId).map(g => ({ g, l: C.log(g) })).filter(x => C.played(x.l))
+    .sort((a, b) => String(b.g.date).localeCompare(String(a.g.date))).slice(0, 5).map(x => ({ date: x.g.date, home: x.g.home, v: val(x.l), vol: V.f(x.l) }));
+  // environment: pace proxy (points in the opponent's games vs league) × (NBA) his projected minutes vs his average
+  const sim = APP.simCache.get(`${sp}:${ev.eventId}`), mrow = sim ? [...(sim.players || [])].find(p => String(p.playerId) === P.playerId && p.mx) : null;
   const paceR = og.length >= 3 && lgAvg('total') ? anAvg(og.map(g => g.total)) / lgAvg('total') : null;
   const minR = mrow?.mx?.min && mrow.mx.minSeason ? mrow.mx.min / mrow.mx.minSeason : null;
-  const pv = { pts: 1, reb: 0.5, ast: 0.8, tpm: 1, blk: 0.3, stl: 0.5 }, alpha = dd ? 0.6 : anAvg((AN_MKT[mm] || ['pts']).map(k => pv[k]));
-  const envR = paceR === null && minR === null ? null : Math.pow(paceR ?? 1, alpha) * (minR ?? 1);
-  // ---- favorability score for the OVER (Under = 100 − Over); each part 0-100, 50 = neutral
+  const envR = paceR === null && minR === null ? null : Math.pow(paceR ?? 1, C.alpha(mm)) * (minR ?? 1);
+  // ---- favorability score in the OVER's view (Under = 100 − Over); each part 0-100, 50 = neutral
   const sh = (h, n, k) => n ? 100 * (h + k * 0.5) / (n + k) : null;
   const tR = T.season !== null && lgAvg('team') ? T.season / lgAvg('team') : null, qR = qualAvg !== null && lgAvg('qual') ? qualAvg / lgAvg('qual') : null;
-  const rs = [tR, qR].filter(x => x !== null), defRatio = rs.length ? anAvg(rs) : null, kDef = Math.min(1, (og.length / (og.length + 4)));
-  const sc = x => clamp(50 + x * 250, 0, 100);
+  const rs = [tR, qR].filter(x => x !== null), defRatio = rs.length ? anAvg(rs) : null, kDef = og.length / (og.length + 4);
+  const sc = x => clamp(50 + x * 250, 0, 100), pn = pos ? C.pos[pos] + 's' : 'players';
   const pl10 = rate(vals.slice(0, 10)), h2hR = rate(h2hG.map(x => x.v));
   const parts = [
     { k: 'Opponent defense vs his position', w: 30, v: defRatio !== null && og.length >= 3 ? sc((defRatio - 1) * kDef) : null },
-    { k: `Comparable ${pos ? AN_POS[pos] + 's' : 'players'} vs this line (last 10)`, w: 25, rate: 1, v: oppHit.l10.n >= 3 ? sh(oppHit.l10.h, oppHit.l10.n, 4) : null },
+    { k: `Comparable ${pn} vs this line (last 10)`, w: 25, rate: 1, v: oppHit.l10.n >= 3 ? sh(oppHit.l10.h, oppHit.l10.n, 4) : null },
     { k: 'His recent form at this line', w: 20, rate: 1, v: pl10.n >= 3 ? sh(pl10.h, pl10.n, 3) : null },
-    { k: 'Minutes, pace & environment', w: 15, v: envR !== null ? sc(envR - 1) : null },
+    { k: C.envLab, w: 15, v: envR !== null ? sc(envR - 1) : null },
     { k: 'Head-to-head history', w: 10, rate: 1, v: h2hR.n >= 2 ? sh(h2hR.h, h2hR.n, 2) : null }];
   for (const p of parts) if (p.rate && p.v !== null && side === 'U') p.v = 100 - p.v;   // hit rates were counted for the bet's side: store every part in the Over's view
   const avail = parts.filter(p => p.v !== null), wSum = avail.reduce((a, p) => a + p.w, 0);
   const over = wSum ? Math.round(avail.reduce((a, p) => a + p.w * p.v, 0) / wSum) : null;
-  const conf = !wSum ? 'None' : wSum >= 90 && og.length >= 8 && qAll.length >= 12 ? 'High' : wSum >= 65 && og.length >= 4 ? 'Medium' : 'Low';
-  const last = og[0]?.date || null;
-  return { P, ev, oppId, oppAbbr, pos, mm, dd, side, line, qualMin, avgMin, og, T, PO, qualAvg, qN: qAll.length, oppHit, examples, h2hG, h2hR, vals, pl10, plSeason: rate(vals),
+  const conf = !wSum ? 'None' : wSum >= 90 && og.length >= (sp === 'NFL' ? 6 : 8) && qAll.length >= 12 ? 'High' : wSum >= 65 && og.length >= 4 ? 'Medium' : 'Low';
+  return { sp, P, ev, oppId, oppAbbr, pos, pn, mm, bin, side, line, V, qualVol, og, T, PO, qualAvg, qN: qAll.length, oppHit, examples, h2hG, h2hR, vals, pl10, plSeason: rate(vals),
     pAvg: vals.length ? anAvg(vals.slice(0, 10)) : null, league, lg: { team: lgAvg('team'), pos: lgAvg('pos'), qual: lgAvg('qual') },
-    rank: { team: rankOf('team', T.season), pos: rankOf('pos', PO.season), qual: rankOf('qual', qualAvg) }, paceR, minR, mrow, parts, over, conf, wSum, last };
+    rank: { team: rankOf('team', T.season), pos: rankOf('pos', PO.season), qual: rankOf('qual', qualAvg) }, paceR, minR, mrow, parts, over, conf, wSum, last: og[0]?.date || null };
 }
 const anLabel = s => s === null ? 'Insufficient data' : s >= 80 ? 'Very Favorable' : s >= 65 ? 'Favorable' : s >= 45 ? 'Neutral' : s >= 25 ? 'Unfavorable' : 'Very Unfavorable';
 const anCol = s => s === null ? 'muted' : s >= 65 ? 'green' : s >= 45 ? 'amber' : 'rose';
-const anVar = s => `var(--${anCol(s) === 'muted' ? 'muted' : anCol(s)})`;
 const anF = (v, d = 1) => v === null || v === undefined ? '—' : (+v).toFixed(d);
+const anFv = (A, v) => A.bin ? pct(v) : anF(v);   // a per-player value: % for yes/no props
 function anSummary(A) {
-  const st = AN_NAME[A.mm], pn = A.pos ? AN_POS[A.pos] + 's' : 'players', s = [], over = A.over, lean = over === null ? null : over >= 55 ? 'Over' : over <= 45 ? 'Under' : null;
-  const lt = A.dd ? 'record a double-double' : `go ${A.side === 'U' ? 'under' : 'over'} ${A.line}`;
-  if (A.T.season !== null && A.rank.team) s.push(`${A.oppAbbr} allows ${anF(A.T.season, A.dd ? 2 : 1)} ${st} per game, ${A.rank.team.r <= A.rank.team.of / 3 ? 'one of the stingiest' : A.rank.team.r > A.rank.team.of * 2 / 3 ? 'one of the most generous' : 'around the middle'} in the league (#${A.rank.team.r} of ${A.rank.team.of} by fewest allowed; league average ${anF(A.lg.team, A.dd ? 2 : 1)}).`);
-  if (A.qualAvg !== null && A.lg.qual !== null) s.push(`${pn[0].toUpperCase() + pn.slice(1)} playing ${A.qualMin}+ minutes against them have ${A.dd ? `had a double-double ${pct(A.qualAvg)} of the time, vs ${pct(A.lg.qual)}` : `averaged ${anF(A.qualAvg)} ${st}, vs ${anF(A.lg.qual)}`} league-wide (${A.qN} player-games).`);
-  if (A.oppHit.l10.n) s.push(`${A.oppHit.l10.h} of ${A.oppHit.l10.n} comparable ${pn} ${A.dd ? 'had a double-double' : `went ${A.side === 'U' ? 'under' : 'over'} ${A.line}`} in ${A.oppAbbr}'s last ${Math.min(10, A.og.length)} games.`);
-  if (A.pl10.n) s.push(`${A.P.playerName} has hit it in ${A.pl10.h} of his last ${A.pl10.n} games${A.pAvg !== null && !A.dd ? ` and averages ${anF(A.pAvg)} ${st} over that span` : ''}.`);
-  if (A.T.l5 !== null && A.T.season && A.og.length >= 6) { const d = (A.T.l5 - A.T.season) / A.T.season; if (Math.abs(d) >= 0.08) s.push(`Trend: they've allowed ${anF(A.T.l5)} over their last 5, ${d > 0 ? 'more' : 'less'} than their season average.`); }
+  const C = AN_SP[A.sp], st = C.name[A.mm], pn = A.pn, s = [], over = A.over, lean = over === null ? null : over >= 55 ? 'Over' : over <= 45 ? 'Under' : null, bt = C.binTxt[A.mm];
+  const d2 = A.bin ? 2 : 1;
+  if (A.T.season !== null && A.rank.team) s.push(`${A.oppAbbr} allows ${anF(A.T.season, d2)} ${st} per game, ${A.rank.team.r <= A.rank.team.of / 3 ? 'one of the stingiest' : A.rank.team.r > A.rank.team.of * 2 / 3 ? 'one of the most generous' : 'around the middle'} in the league (#${A.rank.team.r} of ${A.rank.team.of} by fewest allowed; league average ${anF(A.lg.team, d2)}).`);
+  if (A.qualAvg !== null && A.lg.qual !== null) s.push(`${pn[0].toUpperCase() + pn.slice(1)} with ${A.qualVol}+ ${A.V.lab} against them have ${A.bin ? `had a ${bt} ${pct(A.qualAvg)} of the time, vs ${pct(A.lg.qual)}` : `averaged ${anF(A.qualAvg)} ${st}, vs ${anF(A.lg.qual)}`} league-wide (${A.qN} player-games).`);
+  if (A.oppHit.l10.n) s.push(`${A.oppHit.l10.h} of ${A.oppHit.l10.n} comparable ${pn} ${A.bin ? `had a ${bt}` : `went ${A.side === 'U' ? 'under' : 'over'} ${A.line}`} in ${A.oppAbbr}'s last ${Math.min(10, A.og.length)} games.`);
+  if (A.pl10.n) s.push(`${A.P.playerName} has hit it in ${A.pl10.h} of his last ${A.pl10.n} games${A.pAvg !== null && !A.bin ? ` and averages ${anF(A.pAvg)} ${st} over that span` : ''}.`);
+  if (A.T.l5 !== null && A.T.season && A.og.length >= 6) { const d = (A.T.l5 - A.T.season) / A.T.season; if (Math.abs(d) >= 0.08) s.push(`Trend: they've allowed ${anF(A.T.l5, d2)} over their last 5, ${d > 0 ? 'more' : 'less'} than their season average.`); }
   if (A.h2hR.n >= 2) s.push(`Against ${A.oppAbbr} he's hit it ${A.h2hR.h} of ${A.h2hR.n} times in recent seasons.`);
-  s.push(over === null ? 'Not enough data yet to score this matchup.' : lean ? `Overall the data leans ${lean} (Over score ${over}, Under score ${100 - over}).` : `Overall the matchup looks neutral (Over score ${over}, Under score ${100 - over}).`);
+  s.push(over === null ? 'Not enough data yet to score this matchup.' : lean ? `Overall the data leans ${A.bin ? (lean === 'Over' ? 'Yes' : 'No') : lean} (${A.bin ? 'Yes' : 'Over'} score ${over}${A.bin ? '' : `, Under score ${100 - over}`}).` : `Overall the matchup looks neutral (${A.bin ? 'Yes' : 'Over'} score ${over}).`);
   return s.join(' ');
 }
 function anRankBar(rk, side) {
   if (!rk) return '<span class="muted">Insufficient data</span>';
-  const f = (rk.r - 1) / Math.max(1, rk.of - 1), favOver = f, s = side === 'U' ? 1 - favOver : favOver, col = s >= 0.66 ? 'var(--green)' : s <= 0.33 ? 'var(--rose)' : 'var(--amber)';
+  const f = (rk.r - 1) / Math.max(1, rk.of - 1), s = side === 'U' ? 1 - f : f, col = s >= 0.66 ? 'var(--green)' : s <= 0.33 ? 'var(--rose)' : 'var(--amber)';
   return `<svg viewBox="0 0 200 22" style="width:100%;max-width:240px;height:auto" role="img" aria-label="rank ${rk.r} of ${rk.of}"><defs><linearGradient id="anG" x1="0" x2="1"><stop offset="0" stop-color="var(--rose)"/><stop offset=".5" stop-color="var(--amber)"/><stop offset="1" stop-color="var(--green)"/></linearGradient></defs>
     <rect x="2" y="8" width="196" height="6" rx="3" fill="url(#anG)" opacity=".35" ${side === 'U' ? 'transform="matrix(-1 0 0 1 200 0)"' : ''}/><circle cx="${(4 + f * 192).toFixed(1)}" cy="11" r="6" fill="${col}"/></svg>
     <div class="xs muted" style="display:flex;justify-content:space-between;max-width:240px"><span>allows least</span><span>allows most</span></div>`;
 }
 function anTrend(A) {
   const gs = A.og.slice(0, 10).reverse(); if (gs.length < 3) return '<div class="xs muted">Insufficient data</div>';
-  const vs = gs.map(gm => gm.against.reduce((a, l) => a + anVal(l, A.mm), 0)), lg = A.lg.team ?? 0;
+  const vs = gs.map(gm => gm.against.reduce((a, l) => a + anVal(A.sp, l, A.mm), 0)), lg = A.lg.team ?? 0;
   const W = Math.max(280, Math.min(560, (PA.cw || 600) - 40)), H = 150, base = 115, top = 14, maxV = Math.max(...vs, lg) * 1.12 || 1, y = v => base - v / maxV * (base - top), n = vs.length, bw = Math.min(30, (W - 40) / n - 6);
   const fav = v => (A.side === 'U' ? v < lg : v > lg) ? 'var(--green)' : 'var(--rose)';
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;color:currentColor" role="img" aria-label="${esc(A.oppAbbr)} allowed, last ${n} games">
@@ -5102,32 +5172,34 @@ function anTrend(A) {
     <line x1="24" x2="${W - 6}" y1="${y(lg).toFixed(1)}" y2="${y(lg).toFixed(1)}" stroke="var(--sky)" stroke-width="1.3" stroke-dasharray="5 4"/><text x="2" y="${(y(lg) + 3).toFixed(1)}" font-size="9" fill="var(--sky)">lg</text></svg>`;
 }
 function anCompare(A) {
-  const rows = [[`${A.P.playerName} (last 10)`, A.pAvg], [`${A.oppAbbr} allows to ${A.pos ? AN_POS[A.pos] + 's' : 'players'} ${A.qualMin}+ min`, A.qualAvg], ['League avg, same group', A.lg.qual]].filter(x => x[1] !== null);
+  const rows = [[`${A.P.playerName} (last 10)`, A.pAvg], [`${A.oppAbbr} allows to ${A.pn} (${A.qualVol}+ ${A.V.lab})`, A.qualAvg], ['League avg, same group', A.lg.qual]].filter(x => x[1] !== null);
   if (!rows.length) return '<div class="xs muted">Insufficient data</div>';
-  const mx = Math.max(...rows.map(x => x[1]), A.dd ? 0 : A.line) * 1.1 || 1;
-  return `<div class="stack" style="gap:.35rem">${rows.map(([k, v], i) => `<div class="xs"><div class="row between"><span>${esc(k)}</span><b class="mono">${A.dd ? pct(v) : anF(v)}</b></div>
+  const mx = Math.max(...rows.map(x => x[1]), A.bin ? 0 : A.line) * 1.1 || 1;
+  return `<div class="stack" style="gap:.35rem">${rows.map(([k, v], i) => `<div class="xs"><div class="row between"><span>${esc(k)}</span><b class="mono">${anFv(A, v)}</b></div>
     <div style="height:8px;background:#0f172a;border-radius:4px;overflow:hidden"><div style="width:${(v / mx * 100).toFixed(1)}%;height:100%;background:${i === 0 ? 'var(--sky)' : i === 1 ? (A.side === 'U' ? (v < A.lg.qual ? 'var(--green)' : 'var(--rose)') : (v > A.lg.qual ? 'var(--green)' : 'var(--rose)')) : 'var(--muted)'}"></div></div></div>`).join('')}
-    ${A.dd ? '' : `<div class="xs muted">Line: ${A.side === 'U' ? 'Under' : 'Over'} ${A.line}</div>`}</div>`;
+    ${A.bin ? '' : `<div class="xs muted">Line: ${A.side === 'U' ? 'Under' : 'Over'} ${A.line}</div>`}</div>`;
 }
 const anHR = (x, lab) => x.n ? `<div class="xs"><div class="row between"><span>${lab}</span><b class="mono ${x.h / x.n >= 0.6 ? 'green' : x.h / x.n <= 0.4 ? 'rose' : 'amber'}">${x.h}/${x.n} (${Math.round(x.h / x.n * 100)}%)</b></div>
   <div style="height:6px;background:#0f172a;border-radius:3px;overflow:hidden"><div style="width:${(x.h / x.n * 100).toFixed(0)}%;height:100%;background:${x.h / x.n >= 0.6 ? 'var(--green)' : x.h / x.n <= 0.4 ? 'var(--rose)' : 'var(--amber)'}"></div></div></div>`
   : `<div class="xs row between"><span>${lab}</span><span class="muted">Insufficient data</span></div>`;
 function anHtml(A) {
-  const st = AN_NAME[A.mm], pn = A.pos ? AN_POS[A.pos] + 's' : 'players', sideTxt = A.dd ? 'Double-double (Yes)' : `${A.side === 'U' ? 'Under' : 'Over'} ${A.line} ${st}`;
+  const C = AN_SP[A.sp], st = C.name[A.mm], pn = A.pn, one = A.pos ? C.pos[A.pos] : 'player', bt = C.binTxt[A.mm];
+  const sideTxt = A.bin ? `${bt[0].toUpperCase() + bt.slice(1)} (Yes)` : `${A.side === 'U' ? 'Under' : 'Over'} ${A.line} ${st}`;
   const mySide = A.over === null ? null : A.side === 'U' ? 100 - A.over : A.over, other = A.over === null ? null : 100 - mySide;
   const tile = (lab, s) => `<div class="inset" style="padding:.5rem;text-align:center"><div class="xs muted">${lab}</div><div class="xl xb mono ${anCol(s)}">${s ?? '—'}</div><div class="xs ${anCol(s)}">${anLabel(s)}</div></div>`;
   const trend = A.T.l5 !== null && A.T.season && A.og.length >= 6 ? (d => Math.abs(d) < 0.05 ? '<span class="muted">steady</span>' : d > 0 ? `<span class="${A.side === 'U' ? 'rose' : 'green'}">▲ allowing more lately</span>` : `<span class="${A.side === 'U' ? 'green' : 'rose'}">▼ allowing less lately</span>`)((A.T.l5 - A.T.season) / A.T.season) : '<span class="muted">Insufficient data</span>';
-  const nG = W => Math.min(W, A.og.length);
-  const cell = (v, W) => v === null ? '<span class="muted">—</span>' : `${A.dd ? anF(v, 2) : anF(v)}${W && A.og.length < W ? `<span class="muted"> (${A.og.length}g)</span>` : ''}`;
+  const nG = W => Math.min(W, A.og.length), d2 = A.bin ? 2 : 1;
+  const cell = (v, W) => v === null ? '<span class="muted">—</span>' : `${anF(v, d2)}${W && A.og.length < W ? `<span class="muted"> (${A.og.length}g)</span>` : ''}`;
   const rk = x => x ? `#${x.r} of ${x.of}` : '<span class="muted">Insufficient data</span>';
   const fmtD = d => d ? new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric', year: '2-digit' }) : '';
+  const yn = v => v ? 'Yes' : 'No', colH = A.bin ? (A.sp === 'NFL' ? 'TD' : 'DD') : esc(st);
   return `<div class="stack" style="gap:.7rem">
     <div class="row between" style="flex-wrap:wrap;gap:.4rem"><div><div class="b">🔍 ${esc(A.P.playerName)} · ${esc(sideTxt)} vs ${esc(A.oppAbbr)}</div>
-      <div class="xs muted">${A.pos ? AN_POS[A.pos] : 'position unknown'} · ${A.og.length} ${esc(A.oppAbbr)} games this season · data through ${A.last ? fmtD(A.last) : '—'} (ESPN box scores)</div></div>
+      <div class="xs muted">${A.pos ? esc(C.pos[A.pos]) : 'position unknown'} · ${A.og.length} ${esc(A.oppAbbr)} games this season · data through ${A.last ? fmtD(A.last) : '—'} (ESPN box scores)</div></div>
       <button type="button" class="xs" data-olanclose>Close ✕</button></div>
     ${A.og.length < 3 ? `<div class="banner bad xs">Insufficient data: only ${A.og.length} ${esc(A.oppAbbr)} box score${A.og.length === 1 ? '' : 's'} loaded this season.</div>` : ''}
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.5rem">
-      ${tile(`Matchup score · ${A.dd ? 'Yes' : A.side === 'U' ? 'Under' : 'Over'} (this bet)`, mySide)}${A.dd ? '' : tile(`Matchup score · ${A.side === 'U' ? 'Over' : 'Under'}`, other)}
+      ${tile(`Matchup score · ${A.bin ? 'Yes' : A.side === 'U' ? 'Under' : 'Over'} (this bet)`, mySide)}${A.bin ? '' : tile(`Matchup score · ${A.side === 'U' ? 'Over' : 'Under'}`, other)}
       <div class="inset" style="padding:.5rem;text-align:center"><div class="xs muted">Confidence</div><div class="b ${A.conf === 'High' ? 'green' : A.conf === 'Medium' ? 'amber' : 'rose'}">${A.conf}</div><div class="xs muted">${A.wSum}% of the score's data available</div></div>
     </div>
     <div class="xs muted">A matchup score rates how favorable the opponent and situation are for this side (50 = neutral). It is not a win probability.</div>
@@ -5146,21 +5218,21 @@ function anHtml(A) {
           <tr><td>Last 5 / 10 / 20</td><td class="mono">${cell(A.PO.l5, 5)} · ${cell(A.PO.l10, 10)} · ${cell(A.PO.l20, 20)}</td></tr>
           <tr><td>League avg to ${esc(pn)}</td><td class="mono">${cell(A.lg.pos)}</td></tr>
           <tr><td>Rank vs ${esc(pn)}</td><td class="mono">${rk(A.rank.pos)}</td></tr>
-          <tr><td>Per ${esc(AN_POS[A.pos] || 'player')} with ${A.qualMin}+ min</td><td class="mono">${A.qualAvg === null ? '<span class="muted">Insufficient data</span>' : (A.dd ? pct(A.qualAvg) : anF(A.qualAvg)) + ` <span class="muted">(${A.qN})</span>`}</td></tr></tbody></table>
+          <tr><td>Per ${esc(one)} with ${A.qualVol}+ ${esc(A.V.lab)}</td><td class="mono">${A.qualAvg === null ? '<span class="muted">Insufficient data</span>' : anFv(A, A.qualAvg) + ` <span class="muted">(${A.qN})</span>`}</td></tr></tbody></table>
         ${anRankBar(A.rank.pos, A.side)}</div>
-      <div class="inset stack" style="gap:.4rem"><div class="xs b sky">${A.dd ? 'Double-double rate' : `${A.side === 'U' ? 'Under' : 'Over'} ${A.line} hit rate`} vs ${esc(A.oppAbbr)}</div>
-        <div class="xs muted">Comparable = ${esc(pn)} who played ${A.qualMin}+ min against them</div>
+      <div class="inset stack" style="gap:.4rem"><div class="xs b sky">${A.bin ? `${bt[0].toUpperCase() + bt.slice(1)} rate` : `${A.side === 'U' ? 'Under' : 'Over'} ${A.line} hit rate`} vs ${esc(A.oppAbbr)}</div>
+        <div class="xs muted">Comparable = ${esc(pn)} with ${A.qualVol}+ ${esc(A.V.lab)} against them</div>
         ${anHR(A.oppHit.l5, `Comparable, last ${nG(5)} games`)}${anHR(A.oppHit.l10, `Comparable, last ${nG(10)} games`)}${anHR(A.oppHit.l20, `Comparable, last ${nG(20)} games`)}
         ${anHR(A.pl10, `${esc(A.P.playerName)}, his last ${A.pl10.n}`)}${anHR(A.plSeason, `${esc(A.P.playerName)}, season`)}</div>
       <div class="inset stack" style="gap:.35rem"><div class="xs b sky">His average vs what ${esc(A.oppAbbr)} allows</div>${anCompare(A)}</div>
     </div>
     <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">${esc(A.oppAbbr)} ${esc(st)} allowed, last ${Math.min(10, A.og.length)} games <span class="muted">(dashed = league avg; green = good for this bet)</span></div>${anTrend(A)}</div>
     <div class="an-grid">
-      <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">Recent ${esc(pn)} vs ${esc(A.oppAbbr)} (${A.qualMin}+ min)</div>
-        ${A.examples.length ? `<div class="table-wrap"><table class="xs"><thead><tr><th>Date</th><th>Player</th><th>Min</th><th>${A.dd ? 'DD' : esc(st)}</th><th></th></tr></thead><tbody>${A.examples.map(l => `<tr><td class="mono">${fmtD(l.date)}</td><td>${esc(l.name)} <span class="muted">${esc(l.teamAbbr)}</span></td><td class="mono">${Math.round(l.min)}</td><td class="mono">${A.dd ? (l.v ? 'Yes' : 'No') : fmtN(l.v)}</td><td>${l.ok === null ? '<span class="muted">push</span>' : l.ok ? '<span class="green">✓</span>' : '<span class="rose">✗</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="xs muted">Insufficient data</div>'}</div>
+      <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">Recent ${esc(pn)} vs ${esc(A.oppAbbr)} (${A.qualVol}+ ${esc(A.V.lab)})</div>
+        ${A.examples.length ? `<div class="table-wrap"><table class="xs"><thead><tr><th>Date</th><th>Player</th><th>${esc(A.V.lab)}</th><th>${colH}</th><th></th></tr></thead><tbody>${A.examples.map(l => `<tr><td class="mono">${fmtD(l.date)}</td><td>${esc(l.name)} <span class="muted">${esc(l.teamAbbr)}</span></td><td class="mono">${Math.round(l.vol)}</td><td class="mono">${A.bin ? yn(l.v) : fmtN(l.v)}</td><td>${l.ok === null ? '<span class="muted">push</span>' : l.ok ? '<span class="green">✓</span>' : '<span class="rose">✗</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="xs muted">Insufficient data</div>'}</div>
       <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">${esc(A.P.playerName)} vs ${esc(A.oppAbbr)} (last 5 meetings, 3 seasons)</div>
-        ${A.h2hG.length ? `<table class="xs"><thead><tr><th>Date</th><th>Min</th><th>${A.dd ? 'DD' : esc(st)}</th><th></th></tr></thead><tbody>${A.h2hG.map(x => `<tr><td class="mono">${fmtD(x.date)} ${x.home === false ? '@' : ''}</td><td class="mono">${Math.round(x.min)}</td><td class="mono">${A.dd ? (x.v ? 'Yes' : 'No') : fmtN(x.v)}</td><td>${!A.dd && x.v === A.line ? '<span class="muted">push</span>' : (A.side === 'U' ? x.v < A.line : x.v > A.line) ? '<span class="green">✓</span>' : '<span class="rose">✗</span>'}</td></tr>`).join('')}</tbody></table>
-          <div class="xs" style="margin-top:.3rem">Avg <b class="mono">${A.dd ? pct(anAvg(A.h2hG.map(x => x.v))) : anF(anAvg(A.h2hG.map(x => x.v)))}</b> · hit <b class="mono">${A.h2hR.h}/${A.h2hR.n}</b></div>` : '<div class="xs muted">No games against them in the last 3 seasons.</div>'}</div>
+        ${A.h2hG.length ? `<table class="xs"><thead><tr><th>Date</th><th>${esc(A.V.lab)}</th><th>${colH}</th><th></th></tr></thead><tbody>${A.h2hG.map(x => `<tr><td class="mono">${fmtD(x.date)} ${x.home === false ? '@' : ''}</td><td class="mono">${Math.round(x.vol)}</td><td class="mono">${A.bin ? yn(x.v) : fmtN(x.v)}</td><td>${!A.bin && x.v === A.line ? '<span class="muted">push</span>' : (A.side === 'U' ? x.v < A.line : x.v > A.line) ? '<span class="green">✓</span>' : '<span class="rose">✗</span>'}</td></tr>`).join('')}</tbody></table>
+          <div class="xs" style="margin-top:.3rem">Avg <b class="mono">${anFv(A, anAvg(A.h2hG.map(x => x.v)))}</b> · hit <b class="mono">${A.h2hR.h}/${A.h2hR.n}</b></div>` : '<div class="xs muted">No games against them in the last 3 seasons.</div>'}</div>
     </div>
     <div class="inset"><div class="xs b sky" style="margin-bottom:.25rem">Matchup summary</div><div class="xs">${esc(anSummary(A))}</div></div>
     <details class="xs"><summary class="muted">How the score is built ▾</summary><table class="xs" style="margin-top:.3rem"><tbody>${A.parts.map(p => { const v = p.v === null ? null : A.side === 'U' ? 100 - p.v : p.v; return `<tr><td>${esc(p.k)}</td><td class="mono">${p.w}%</td><td class="mono ${anCol(v)}">${v === null ? 'no data (weight shared out)' : Math.round(v)}</td></tr>`; }).join('')}</tbody></table>
@@ -5181,7 +5253,7 @@ async function anOpen(id) {
   AN.res.delete(id);
   try {
     const who = anPlayer(r);
-    await Promise.all([anEnsureLeague(), who?.P ? anEnsureLogs(who.P.playerId) : null]);
+    await Promise.all([anEnsureLeague(r.sport), who?.P ? anEnsureLogs(r.sport, who.P.playerId) : null]);
     const A = anCompute(r); A.k = `${id}|${BOX.ver}`; AN.res.set(id, A);
   } catch (e) { AN.res.set(id, { err: `Couldn't load the matchup data (${e.message || 'network'}). Try again.` }); }
   if (AN.open === id) anPaint();

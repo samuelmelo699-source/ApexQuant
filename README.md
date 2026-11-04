@@ -74,10 +74,11 @@ Netlify → Site configuration → Environment variables:
 Credits (approximate): game lines ≈ 3 per sport per snapshot (about 100–250 a day in season). Closing prices ≈ 1 per market per tracked game. Each alert scan ≈ 5 per game (about 60–80 for a full NBA night). The job only runs the parts you turn on.
 The model's own predictions (recap, report card) are still logged when the app is opened before games.
 
-## 🔍 Analyze (Prop outliers, NBA)
+## 🔍 Analyze (Prop outliers, NBA + NFL)
 Each NBA prop card has an Analyze button that opens a matchup panel for that exact player, market, line and side:
 opponent allowance of the stat (season, last 5/10/20, league average, rank, trend), allowance to his position,
 hit rates of comparable players (same position, similar minutes) against that opponent, his own hit rate,
 head-to-head over 3 seasons, charts and a 0-100 matchup score (30% defense/position, 25% comparable hit rate,
 20% his form, 15% minutes/pace, 10% head-to-head; missing parts' weights are redistributed).
+NFL: QB/RB/WR/TE from team rosters; comparable = same position with a similar workload (pass attempts, carries, targets or touches).
 Data: this season's ESPN box scores for every team (fetched once, then only new games) and ESPN game logs.
