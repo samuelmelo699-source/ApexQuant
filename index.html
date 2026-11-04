@@ -202,7 +202,7 @@
       <button type="button" data-view="outliers">🔥 Prop outliers</button>
       <button type="button" data-view="first">🥇 First basket</button>
       <button type="button" data-view="analyzer">📈 Prop analyzer</button>
-      <button type="button" data-view="tracker">📒 Bet tracker</button>
+      <button type="button" data-view="tracker">📐 Model report</button>
       <button type="button" data-view="audit">🛡️ Roster audit</button>
     </nav>
     <label class="nav-select"><span class="sr-only">Page</span><select id="viewSelect" aria-label="Page"></select></label>
@@ -509,10 +509,10 @@
     <div class="card stack">
       <div class="row between">
         <div>
-          <h2 class="sm xb">📒 Bet tracker &amp; closing-line value</h2>
-          <p class="note" style="margin:0">Closing-line value (CLV) is your price compared with the fair price at kick-off. Beating the close on average is the clearest proof of an edge, long before profit settles down. Prop closes are captured automatically in the last 15 minutes before start while the app is open. Use "Capture close" to do it by hand.</p>
+          <h2 class="sm xb">⚙️ Bankroll &amp; backup</h2>
+          <p class="note" style="margin:0">Stake sizes shown across the site use these settings.</p>
         </div>
-        <div class="row"><button type="button" id="trCloseBtn" class="btn-soft">Capture close now</button><button type="button" id="trCsvBtn">⬇ CSV</button>
+        <div class="row"><button type="button" id="trCloseBtn" class="btn-soft hidden">Capture close now</button><button type="button" id="trCsvBtn" class="hidden">⬇ CSV</button>
           <button type="button" id="bkSaveBtn" title="Download everything this site saved in your browser: API key, bets, prediction log, settings">💾 Backup all data</button>
           <label class="btn-like" style="cursor:pointer"><input type="file" id="bkFile" accept=".json,application/json" class="hidden">📂 Restore backup</label></div>
       </div>
@@ -523,9 +523,9 @@
         <div class="xs muted" id="trMsg" style="align-self:end"></div>
       </div>
       <div class="xs muted" id="bkMsg"></div>
-      <div class="grid g4" id="trStats"></div>
-      <div class="xs" id="trVerdict"></div>
-      <div id="trBody"></div>
+      <div class="grid g4 hidden" id="trStats"></div>
+      <div class="xs hidden" id="trVerdict"></div>
+      <div id="trBody" class="hidden"></div>
     </div>
     <div class="card stack">
       <div class="row between">
@@ -637,12 +637,18 @@ const SLOT_DEFS = {
     { slot: 'TE2', group: 'TE', carry: 0.00, catch: 0.04 }
   ],
   NBA: [
-    { slot: 'G1', group: 'G', pts: 0.19, reb: 0.09, ast: 0.27 },
-    { slot: 'G2', group: 'G', pts: 0.15, reb: 0.08, ast: 0.16 },
-    { slot: 'F1', group: 'F', pts: 0.17, reb: 0.14, ast: 0.12 },
-    { slot: 'F2', group: 'F', pts: 0.12, reb: 0.15, ast: 0.08 },
-    { slot: 'C1', group: 'C', pts: 0.13, reb: 0.22, ast: 0.08 },
-    { slot: '6TH', group: '*', pts: 0.08, reb: 0.06, ast: 0.07 }
+    // starting five (S1-S5) + top five off the bench (B1-B5), any position: teams start 3 guards or 2 bigs,
+    // so slots follow who actually starts/plays, not positions. Shares are only a prior when a player has no game log.
+    { slot: 'S1', group: '*', pts: 0.19, reb: 0.12, ast: 0.20 },
+    { slot: 'S2', group: '*', pts: 0.17, reb: 0.12, ast: 0.15 },
+    { slot: 'S3', group: '*', pts: 0.15, reb: 0.11, ast: 0.12 },
+    { slot: 'S4', group: '*', pts: 0.13, reb: 0.11, ast: 0.10 },
+    { slot: 'S5', group: '*', pts: 0.11, reb: 0.10, ast: 0.08 },
+    { slot: 'B1', group: '*', opt: true, pts: 0.07, reb: 0.06, ast: 0.07 },
+    { slot: 'B2', group: '*', opt: true, pts: 0.06, reb: 0.05, ast: 0.06 },
+    { slot: 'B3', group: '*', opt: true, pts: 0.05, reb: 0.04, ast: 0.05 },
+    { slot: 'B4', group: '*', opt: true, pts: 0.04, reb: 0.03, ast: 0.04 },
+    { slot: 'B5', group: '*', opt: true, pts: 0.03, reb: 0.02, ast: 0.03 }
   ],
   NHL: [
     { slot: 'F1', group: 'F', goal: 0.17, ast: 0.16, sog: 3.4 },
@@ -794,7 +800,7 @@ function mapStatus(raw, hasInjury) {
 }
 
 function positionGroup(sport, abbr) {
-  const p = String(abbr || '').toUpperCase().replace(/\d+$/, '');
+  const p = String(abbr || '').toUpperCase().replace(/\d+$/, '').split(/[-\/]/)[0].trim();
   if (sport === 'NFL' || sport === 'CFB') {
     if (p === 'QB') return 'QB';
     if (['RB', 'FB', 'HB'].includes(p)) return 'RB';
@@ -1168,6 +1174,16 @@ function buildSlots(sport, teamId, ev = null) {
     const p = id && playable.find(r => r.playerId === id && (s.group === '*' || r.group === s.group));
     if (p && !used.has(p.playerId)) { s.player = p; s.source = 'pick'; used.add(p.playerId); }
   }
+  // 1b) NBA: tonight's official starting five (once ESPN posts it) fills S1-S5.
+  if (sport === 'NBA' && ev) {
+    const five = REG.pregame?.[`NBA:${ev.eventId}`]?.starters?.[String(teamId)] || [];
+    const sl = out.filter(s => /^S\d/.test(s.slot) && !s.player);
+    for (const id of five) {
+      const p = playable.find(r => r.playerId === String(id)); if (!p || used.has(p.playerId)) continue;
+      const s = sl.shift(); if (!s) break;
+      s.player = p; s.source = 'official'; used.add(p.playerId);
+    }
+  }
   // 2) Everything else from the depth chart (injured starters are skipped, so backups move up).
   for (const s of out) {
     if (s.player) continue;
@@ -1224,7 +1240,7 @@ function runGate(ev) {
   if (miss.length) checks.push({ ok: true, name: 'Depth chart vs roster', detail: miss.map(([a, m]) => `${a}: ${m} listed name(s) not on the active roster were skipped`).join(' · ') });
   checks.push({ ok: !issues.length, name: 'Lineup integrity', detail: issues.length ? issues.join(' · ') : 'Every player is on this team, active, in a matching role, and used once' });
 
-  const total = sides.reduce((a, s) => a + s.slots.length, 0);
+  const total = sides.reduce((a, s) => a + s.slots.filter(x => !x.opt || x.player).length, 0);   // bench slots are optional (short rosters)
   const filled = sides.reduce((a, s) => a + s.slots.filter(x => x.ok).length, 0);
   checks.push({ ok: filled === total, name: 'Role slots', detail: `${filled}/${total} filled` });
   if (filled === 0) return { state: 'FAILED', game: true, players: false, reason: 'No role slots filled — pick players in the lineup panel.', checks };
@@ -1899,8 +1915,9 @@ function playerMarkets(ev, sim) {
         }
       } else if (sport === 'NBA') {
         const ptsShare = s.pts * role, p = pts * ptsShare;
-        const reb = 44 * s.reb * role * clamp(1 + (e.rush / 200), 0.85, 1.15);
-        const ast = pts * 0.235 * s.ast * role;
+        const pg = s.player.group, rk = pg === 'C' ? 1.5 : pg === 'G' ? 0.7 : 1, ak = pg === 'G' ? 1.4 : pg === 'C' ? 0.6 : 1;
+        const reb = 44 * s.reb * rk * role * clamp(1 + (e.rush / 200), 0.85, 1.15);
+        const ast = pts * 0.235 * s.ast * ak * role;
         add(s, 'nba_pts', 'Points', p, Math.max(4, p * 0.28), 'normal');
         const ptsRow = out[out.length - 1]?.market === 'nba_pts' && out[out.length - 1].playerId === s.player.playerId ? out[out.length - 1] : { mean: p, sd: Math.max(4, p * 0.28) };
         add(s, 'nba_reb', 'Rebounds', reb, Math.max(2, reb * 0.33), 'normal');
@@ -2124,7 +2141,7 @@ function nbaMinutesPlan(ev, teamId, sim) {
   const b2b = last && (start - new Date(last.date).getTime()) / 864e5 < 1.4;
   const mySp = teamId === ev.homeTeamId ? sim.avgAway - sim.avgHome : sim.avgHome - sim.avgAway;   // model's projected margin (negative = favourite), not the betting spread
   const confirmed = REG.pregame[`NBA:${ev.eventId}`]?.starters?.[String(teamId)];
-  const starters = new Set(confirmed || buildSlots('NBA', teamId, ev).filter(s => s.player && s.slot !== '6TH').map(s => s.player.playerId));
+  const starters = new Set(confirmed || buildSlots('NBA', teamId, ev).filter(s => s.player && /^S\d/.test(s.slot)).map(s => s.player.playerId));
   if (confirmed) {
     // official starting five posted: a usual starter coming off the bench loses minutes, a new starter gains them
     for (const [pid, x] of plan) {
@@ -2367,7 +2384,7 @@ function renderTeamPanel(ev, side) {
               ${['verified', 'questionable', 'out'].map(st => `<option value="${st}" ${effStatus(p) === st ? 'selected' : ''}>${st === 'verified' ? 'Active' : st[0].toUpperCase() + st.slice(1)}</option>`).join('')}
             </select>` : '<span></span>'}
           <input type="number" min="0.3" max="2" step="0.05" value="${s.usage}" data-usage="${side}" data-slot="${s.slot}" title="Usage multiplier for this role" aria-label="${s.slot} usage">
-        </div>${p ? `<div class="xs muted" style="margin:-.2rem 0 0 50px">${esc(p.playerName)}${s.source === 'depth' ? ` · ${depth === 'ok' ? 'depth' : depth === 'box' ? 'rotation' : 'rank'} #${p.depthRank}` : ' · your pick'}</div>` : s.warn ? `<div class="xs amber" style="margin:-.2rem 0 0 50px">${esc(s.warn)}</div>` : ''}`;
+        </div>${p ? `<div class="xs muted" style="margin:-.2rem 0 0 50px">${esc(p.playerName)}${s.source === 'official' ? ' · ✅ official starter' : s.source === 'depth' ? ` · ${depth === 'ok' ? 'depth' : depth === 'box' ? 'rotation' : 'rank'} #${p.depthRank}` : ' · your pick'}</div>` : s.warn ? `<div class="xs amber" style="margin:-.2rem 0 0 50px">${esc(s.warn)}</div>` : ''}`;
       }).join('')}
       <div class="note">Usage = role multiplier (1.0 = default share for the slot). Set it above 1 for a featured player and below 1 for a limited one.</div>
     </div>`;
@@ -2501,7 +2518,7 @@ function renderSummary(sim) {
         <td class="mono ${r.edge > 0 ? 'pos' : 'neg'}">${r.edge === null ? '—' : signed(r.edge * 100) + '%'}</td>
         <td class="mono ${r.ev > 0 ? 'green b' : 'rose'}">${r.ev === null ? '—' : '$' + r.ev.toFixed(3)}</td>
         <td class="mono">${r.ev > 0 && r.odds ? '$' + kellyStake(r.p, r.q, r.odds) : '—'}</td>
-        <td>${r.odds ? `<button type="button" data-gtrack="${i}" class="xs">Track</button>` : ''}</td></tr>`).join('')}</tbody>
+        <td></td></tr>`).join('')}</tbody>
     </table></div>
     <p class="note" style="margin:0">Model % excludes pushes. Edge is measured against the no-vig market price (the 10-book consensus when game lines come from The Odds API), otherwise against the break-even price. The Book column shows the best price and where it is. "±" is Monte Carlo error. Edges smaller than that are noise.</p>`;
 }
@@ -2766,7 +2783,7 @@ function explainProp(id) {
   {
     const mySpread = +((isHome ? sim.avgAway - sim.avgHome : sim.avgHome - sim.avgAway).toFixed(1));   // negative = model favourite
     if (sport === 'NBA' && Math.abs(mySpread) >= 9.5) {
-      if (r.slot === '6TH') add(over, 1, `Model projects a blowout (${esc(myAbbr)} by ${fmtN(-mySpread)}): blowouts give bench players extra minutes.`);
+      if (/^B\d/.test(r.slot)) add(over, 1, `Model projects a blowout (${esc(myAbbr)} by ${fmtN(-mySpread)}): blowouts give bench players extra minutes.`);
       else add(under, 2, `<b>Blowout risk:</b> the model has ${esc(myAbbr)} ${mySpread < 0 ? 'winning' : 'losing'} by ${fmtN(Math.abs(mySpread))}. Starters can sit the whole 4th quarter if it gets out of hand.`);
     }
     if (sport === 'NFL' && Math.abs(mySpread) >= 6.5) {
@@ -3898,7 +3915,7 @@ function renderOutliers() {
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(r.fairOdds)} (${pct(r.pWin)}) · ${r.nBooks} books${age}</div>
       <div class="row between xs" style="margin-top:.4rem">
         <span>${r.modelP !== null ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
-        <span class="row" style="gap:.35rem">${r.mm && (r.side !== 'Yes' || r.mm === 'nba_dd') ? `<button type="button" class="xs ${OL.chart === r.id ? 'on' : ''}" data-olchart="${esc(r.id)}">📈 Chart</button>` : ''}<button type="button" class="${tracked(r.id) ? 'on' : 'btn-soft'}" data-track="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓ Tracked' : '+ Track bet'}</button></span>
+        <span class="row" style="gap:.35rem">${r.mm && (r.side !== 'Yes' || r.mm === 'nba_dd') ? `<button type="button" class="xs ${OL.chart === r.id ? 'on' : ''}" data-olchart="${esc(r.id)}">📈 Chart</button>` : ''}</span>
       </div>
       ${r.stale ? `<div class="xs amber" style="margin-top:.3rem">⚠ Possibly stale: ${r.lagMin !== null && r.lagMin > 10 ? `this book updated ${Math.round(r.lagMin)} min before the others` : `price is ${Math.round(r.ageMin)} min old`}.</div>` : ''}
       ${sus ? '<div class="xs amber" style="margin-top:.3rem">Unusually large edge: often a stale or wrong line that books limit or void.</div>' : ''}
@@ -4491,7 +4508,7 @@ function renderGLO() {
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(toAmerican(r.p))} (${pct(r.p)}) · ${r.nBooks} books${age}</div>
       <div class="row between xs" style="margin-top:.4rem">
         <span>${r.modelP !== null && r.modelP !== undefined ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
-        <button type="button" class="${tracked(r.id) ? 'on' : 'btn-soft'}" data-glotrack="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓ Tracked' : '+ Track bet'}</button>
+
       </div>
       ${r.stale ? `<div class="xs amber" style="margin-top:.3rem">⚠ Possibly stale: ${r.lagMin !== null && r.lagMin > 10 ? `this book updated ${Math.round(r.lagMin)} min before the others` : `price is ${Math.round(r.ageMin)} min old`}.</div>` : ''}
       ${sus ? '<div class="xs amber" style="margin-top:.3rem">Unusually large edge for a game line: usually a stale price or a wrong team/number. Double-check before betting.</div>' : ''}
@@ -4600,7 +4617,7 @@ function fsModelIndex() {
         const pTeamProj = clamp(pTeamData + 0.1 * (pWinMe - 0.5), 0.2, 0.8);
         const conf = official[String(teamId)];
         let five = new Set((conf || []).map(String));
-        if (!five.size) try { five = new Set(buildSlots('NBA', teamId, sim.ev).filter(x => x.player && x.slot !== '6TH').map(x => String(x.player.playerId))); } catch {}
+        if (!five.size) try { five = new Set(buildSlots('NBA', teamId, sim.ev).filter(x => x.player && /^S\d/.test(x.slot)).map(x => String(x.player.playerId))); } catch {}
         const mine = pts.filter(r => r.team === abbr).map(r => ({ r, id: String(r.playerId), start: five.has(String(r.playerId)), w: Math.pow(Math.max(r.mean, 0.5), 1.15) }));
         const st = mine.filter(x => x.start), bn = mine.filter(x => !x.start);
         // projection share
@@ -5014,7 +5031,7 @@ function renderFirst() {
         <div class="xl xb mono green">${fmtOdds(r.price)}</div></div>
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(toAmerican(r.pWin))} (${pct(r.pWin)}) · ${r.nBooks} books</div>
       <div class="row between xs" style="margin-top:.4rem"><span>${r.modelP !== null ? `<span class="sky" title="75% data (tip-off + who takes the first shot) · 25% projection (scoring share)">Model ${pct(r.modelP)}</span>${r.pData != null ? ` <span class="muted">(data ${pct(r.pData)} · proj ${pct(r.pProj)})</span>` : ''} · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
-        <button type="button" class="${tracked(r.id) ? 'on' : 'btn-soft'}" data-fstrack="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓ Tracked' : '+ Track bet'}</button></div>
+</div>
     </div>`;
   $('fsBest').innerHTML = errs + (top.length ? `<div class="xs b" style="margin-bottom:.4rem">Best first-scorer prices on the board</div><div class="ol-grid">${top.map(card).join('')}</div>`
     : FS.data.size ? '<div class="inset xs muted">No +EV first-scorer prices match your filters right now. The full boards are below.</div>' : '');
@@ -5036,7 +5053,7 @@ function renderFirst() {
         <td class="mono sky">${r.modelP !== null ? pct(r.modelP) : '—'}</td>
         <td class="xs"><details><summary class="muted">${r.nBooks} ▾</summary>${r.prices.map(p => `<span class="badge s-unverified mono" style="margin:.15rem .2rem 0 0">${esc(p.title)} ${fmtOdds(p.price)}</span>`).join('')}</details></td>
         <td class="mono">${r.stake ? '$' + r.stake : '—'}</td>
-        <td>${r.ev > 0 ? `<button type="button" class="xs ${tracked(r.id) ? 'on' : ''}" data-fstrack="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓' : 'Track'}</button>` : ''}</td></tr>`).join('')}</tbody></table></div></details>`;
+        <td></td></tr>`).join('')}</tbody></table></div></details>`;
   }).join('');
 }
 function trackFirst(id) {
