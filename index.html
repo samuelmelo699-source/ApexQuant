@@ -3829,7 +3829,10 @@ function renderOutliers() {
     ? `${spLabel(o.tab)}: ${nG} games · ${OL.rows.filter(r => r.sport === o.tab).length} prices checked · <b class="green">${rows.length} outliers</b>${hiddenStale ? ` · ${hiddenStale} stale hidden` : ''}${o.minHit && o.tab !== APP.sport && !OL.rows.some(r => r.sport === o.tab && olHit(r)) ? `<div class="amber">Hit rates need ${o.tab} game logs: pick ${o.tab} at the top of the page once, then come back.</div>` : ''}`
     : (hasOdds() ? `Press Scan ${spLabel(o.tab)} to load ${spLabel(o.tab)} props.${o.tab === 'CBB' ? ' NCAAB props are priced against the other books only (no college player model).' : ''} Other tabs aren't touched.` : '<span class="amber">Add your Odds API key to start.</span>');
   if (!rows.length) { $('olBody').innerHTML = errs + (nG ? '<div class="inset xs muted">No outliers match. Try a lower minimum EV or a wider odds range.</div>' : ''); return; }
-  $('olBody').innerHTML = errs + `<div class="ol-grid">${rows.map(r => {
+  const chartRow = OL.chart ? OL.rows.find(r => r.id === OL.chart) : null, chartX = chartRow ? paFromOutlier(chartRow) : null;
+  PA.cw = $('olBody').clientWidth || 600;
+  const chartBox = chartRow ? `<div class="inset pa-detail-box" style="margin-bottom:.6rem">${chartX ? paDetail(chartX) : `<div class="xs muted">No game log for ${esc(chartRow.player)} yet: the model needs this sport's rosters and game logs (scan with this sport picked at the top).</div>`}<div style="text-align:right;margin-top:.3rem"><button type="button" class="xs" data-olchartclose>Close ✕</button></div></div>` : '';
+  $('olBody').innerHTML = errs + chartBox + `<div class="ol-grid">${rows.map(r => {
     const when = new Date(r.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     const sus = r.ev > 0.5;
     const age = r.ageMin === null ? '' : ` · updated ${r.ageMin < 1 ? '<1' : Math.round(r.ageMin)}m ago`;
@@ -3844,7 +3847,7 @@ function renderOutliers() {
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(r.fairOdds)} (${pct(r.pWin)}) · ${r.nBooks} books${age}</div>
       <div class="row between xs" style="margin-top:.4rem">
         <span>${r.modelP !== null ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
-        <button type="button" class="${tracked(r.id) ? 'on' : 'btn-soft'}" data-track="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓ Tracked' : '+ Track bet'}</button>
+        <span class="row" style="gap:.35rem">${r.pid && r.mm && r.side !== 'Yes' ? `<button type="button" class="xs ${OL.chart === r.id ? 'on' : ''}" data-olchart="${esc(r.id)}">📈 Chart</button>` : ''}<button type="button" class="${tracked(r.id) ? 'on' : 'btn-soft'}" data-track="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓ Tracked' : '+ Track bet'}</button></span>
       </div>
       ${r.stale ? `<div class="xs amber" style="margin-top:.3rem">⚠ Possibly stale: ${r.lagMin !== null && r.lagMin > 10 ? `this book updated ${Math.round(r.lagMin)} min before the others` : `price is ${Math.round(r.ageMin)} min old`}.</div>` : ''}
       ${sus ? '<div class="xs amber" style="margin-top:.3rem">Unusually large edge: often a stale or wrong line that books limit or void.</div>' : ''}
@@ -4018,7 +4021,11 @@ function bindOutliers() {
   $('olMarket').addEventListener('change', renderOutliers);
   $('olScanBtn').addEventListener('click', () => scanOutliers(false));
   $('olRefreshBtn').addEventListener('click', () => scanOutliers(true));
-  $('olBody').addEventListener('click', e => { const b = e.target.closest('[data-track]'); if (b) trackOutlier(b.dataset.track); });
+  $('olBody').addEventListener('click', e => {
+    const b = e.target.closest('[data-track]'); if (b) { trackOutlier(b.dataset.track); return; }
+    if (e.target.closest('[data-olchartclose]')) { OL.chart = null; renderOutliers(); return; }
+    const c = e.target.closest('[data-olchart]'); if (c) { OL.chart = OL.chart === c.dataset.olchart ? null : c.dataset.olchart; renderOutliers(); if (OL.chart) $('olBody').scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+  });
 
   bindFirst();
   bindReport();
@@ -4708,7 +4715,7 @@ async function scanFirst(force = false) {
    ===================================================================== */
 const PA_MARKETS = [['nba_pts', 'Points', 'PTS'], ['nba_reb', 'Rebounds', 'REB'], ['nba_ast', 'Assists', 'AST'], ['nba_3pm', '3-Pointers', '3PM'], ['nba_pra', 'Pts+Reb+Ast', 'PRA']];
 STORE.pa = { mkt: 'nba_pts', game: '', q: '', sort: 'cover', ...(STORE.pa || {}) };
-const PA = { open: null, slide: {}, busy: false, msg: '', loaded: false };
+const PA = { open: null, slide: {}, busy: false, msg: '', loaded: false, cur: {} };
 const paShort = n => String(n || '').split(' ').filter(w => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(w)).slice(-1)[0] || n;
 function paRows() {
   const out = [], q = normName(STORE.pa.q || '');
@@ -4756,7 +4763,8 @@ function paChart(x, L) {
   </svg>`;
 }
 function paDetail(x) {
-  const id = x.r.id, step = 0.5, vals = x.logs.map(g => g.v);
+  const id = x.key || x.r.id, step = 0.5, vals = x.logs.map(g => g.v);
+  PA.cur[id] = x;
   const lo = Math.max(0, Math.floor(Math.min(x.proj, ...(vals.length ? vals : [x.proj])) - 4)), hi = Math.ceil(Math.max(x.proj, x.line ?? 0, ...(vals.length ? vals : [x.proj])) + 4);
   const L = PA.slide[id] ?? (x.line ?? Math.round(x.proj * 2) / 2 - (Number.isInteger(Math.round(x.proj * 2) / 2) ? 0.5 : 0));
   const pr = probAtLine(x.r, L), pO = pr.over / Math.max(1e-9, pr.over + pr.under);
@@ -4765,15 +4773,15 @@ function paDetail(x) {
   const avg = arr => arr.length ? fmtN(arr.reduce((a, g) => a + g.v, 0) / arr.length) : '—';
   return `<div class="stack" style="gap:.5rem">
     <div class="row between xs" style="flex-wrap:wrap;gap:.5rem">
-      <span><b>${esc(x.r.name)}</b> <span class="muted">${esc(x.team)} ${x.home ? 'vs' : '@'} ${esc(x.opp)} · ${esc(PA_MARKETS.find(m => m[0] === STORE.pa.mkt)?.[1] || '')}</span></span>
-      <span class="muted">Projection <b class="sky">${fmtN(x.proj)}</b>${x.line !== null ? ` · consensus <b>${fmtN(x.line)}</b>` : ''} · avg ${lab.toLowerCase().startsWith('last') ? 'L10' : 'season'} ${avg(x.win)}</span>
+      <span><b>${esc(x.r.name)}</b> <span class="muted">${esc(x.team)} ${x.home ? 'vs' : '@'} ${esc(x.opp)} · ${esc(x.mLabel || PA_MARKETS.find(m => m[0] === STORE.pa.mkt)?.[1] || '')}</span></span>
+      <span class="muted">Projection <b class="sky">${fmtN(x.proj)}</b>${x.line !== null ? ` · ${x.lineLab ? 'card line' : 'consensus'} <b>${fmtN(x.line)}</b>` : ''} · avg ${lab.toLowerCase().startsWith('last') ? 'L10' : 'season'} ${avg(x.win)}</span>
     </div>
     <div class="table-wrap pa-chart" style="padding-bottom:.2rem">${paChart(x, L)}</div>
     <div class="row xs" style="gap:.6rem;align-items:center;flex-wrap:wrap">
       <label for="paSlide" class="muted">Line</label>
       <input id="paSlide" data-paslide="${esc(id)}" type="range" min="${lo + 0.5}" max="${hi - 0.5}" step="${step}" value="${L}" style="flex:1;min-width:180px">
       <b class="mono amber pa-lval" style="min-width:3.5rem">${fmtN(L)}</b>
-      ${x.line !== null ? `<button type="button" class="xs" data-pareset="${esc(id)}">Reset to ${fmtN(x.line)}</button>` : ''}
+      ${x.line !== null ? `<button type="button" class="xs" data-pareset="${esc(id)}">Reset to ${fmtN(x.line)}${x.lineLab ? ` (${esc(x.lineLab)})` : ''}</button>` : ''}
     </div>
     <div class="grid g4 xs pa-stats">
       <div class="inset"><div class="muted">Over hit · ${lab}</div><div class="b">${stat(x.win)}</div></div>
@@ -4822,6 +4830,31 @@ async function openAnalyzer(loadLines = false) {
   } catch (e) { PA.msg = e.message; }
   PA.busy = false; PA.loaded = true; renderAnalyzer();
 }
+// rotate / resize: redraw an open chart at the new width
+let paResizeT = null;
+window.addEventListener('resize', () => { clearTimeout(paResizeT); paResizeT = setTimeout(() => {
+  if (APP.view === 'analyzer' && PA.open) renderAnalyzer();
+  if (APP.view === 'outliers' && OL.chart) renderOutliers();
+}, 250); });
+// reset-to-line works on any page: re-draw that panel in place
+document.addEventListener('click', e => {
+  const r = e.target.closest?.('[data-pareset]'); if (!r) return;
+  const id = r.dataset.pareset, x = PA.cur[id], box = r.closest('.pa-detail-box'); delete PA.slide[id];
+  if (x && box) { const keep = box.querySelector('[data-paclose], [data-olchartclose]')?.outerHTML || ''; box.innerHTML = paDetail(x) + (keep ? `<div style="text-align:right;margin-top:.3rem">${keep}</div>` : ''); }
+});
+// the same analysis for a prop outlier card: model row + this season's game log, slider starts at the card's line
+function paFromOutlier(o) {
+  if (!o.pid || !o.mm || o.side === 'Yes') return null;
+  for (const sim of APP.simCache.values()) {
+    if (sim.ev.sport !== o.sport) continue;
+    const m = [...(sim.players || []), ...(sim.players?.derived || [])].find(p => String(p.playerId) === String(o.pid) && p.market === o.mm);
+    if (!m || m.binary || !(m.mean > 0)) continue;
+    const logs = logAll(o.sport, o.pid, o.mm) || [];
+    return { key: `ol|${o.id}`, r: m, sim, line: o.line, lineLab: `${o.side === 'O' ? 'Over' : 'Under'} ${fmtOdds(o.price)} ${o.book}`, proj: m.mean, team: m.team,
+      opp: m.team === sim.ev.homeAbbr ? sim.ev.awayAbbr : sim.ev.homeAbbr, home: m.team === sim.ev.homeAbbr, logs, win: logs.length >= 10 ? logs.slice(0, 10) : logs, mLabel: o.mLabel };
+  }
+  return null;
+}
 function bindAnalyzer() {
   $('paMkts').addEventListener('click', e => { const b = e.target.closest('[data-pamkt]'); if (!b) return; STORE.pa.mkt = b.dataset.pamkt; PA.open = null; save(); renderAnalyzer(); });
   $('paGame').addEventListener('change', e => { STORE.pa.game = e.target.value; save(); renderAnalyzer(); });
@@ -4829,17 +4862,17 @@ function bindAnalyzer() {
   $('paSearch').addEventListener('input', e => { STORE.pa.q = e.target.value; save(); renderAnalyzer(); });
   $('paLoadBtn').addEventListener('click', () => { if (!hasOdds()) { PA.msg = 'Add your Odds API key (Prop outliers) first.'; renderAnalyzer(); return; } openAnalyzer(true); });
   $('paBody').addEventListener('click', e => {
-    const r = e.target.closest('[data-pareset]'); if (r) { delete PA.slide[r.dataset.pareset]; renderAnalyzer(); return; }
+    if (e.target.closest('[data-pareset]')) return;   // (handled at document level)
     if (e.target.closest('[data-paclose]')) { PA.open = null; renderAnalyzer(); return; }
     if (e.target.closest('.pa-detail-box')) return;
     const t = e.target.closest('[data-paopen]'); if (!t) return;
     PA.open = PA.open === t.dataset.paopen ? null : t.dataset.paopen; renderAnalyzer();
     if (PA.open) $('paBody').scrollIntoView({ block: 'start', behavior: 'smooth' });
   });
-  $('paBody').addEventListener('input', e => {
-    const s = e.target.closest('[data-paslide]'); if (!s) return;
+  document.addEventListener('input', e => {
+    const s = e.target.closest?.('[data-paslide]'); if (!s) return;
     PA.slide[s.dataset.paslide] = +s.value;
-    const x = paRows().find(y => y.r.id === s.dataset.paslide); if (!x) return;
+    const x = PA.cur[s.dataset.paslide]; if (!x) return;
     // refresh the chart and numbers only (the slider itself stays, so dragging isn't interrupted)
     const tmp = document.createElement('div'); tmp.innerHTML = paDetail(x);
     const box = s.closest('.pa-detail-box');
