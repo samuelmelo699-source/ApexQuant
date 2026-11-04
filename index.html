@@ -4625,6 +4625,16 @@ async function scanFirst(force = false) {
   if (FS.busy) return;
   if (!hasOdds()) { $('fsStatus').innerHTML = '<span class="amber">Add your Odds API key first.</span>'; return; }
   FS.busy = true; FS.errors = []; $('fsScanBtn').disabled = true;
+  // the model % needs the NBA games, rosters and game logs loaded: switch the top sport to NBA if needed
+  try {
+    if (APP.sport !== 'NBA') {
+      $('fsStatus').textContent = 'Loading the NBA model (games, rosters, game logs) so the cards get a model %…';
+      APP.sport = 'NBA'; APP.eventId = null; APP.simCache.clear(); renderChrome();
+      await syncSport(false, true);
+    }
+    $('fsStatus').textContent = 'Loading NBA rosters and game logs…';
+    await preloadSlate();
+  } catch (e) { logReq('first basket model', 'error', e.message); }
   const cache = (() => { try { return JSON.parse(localStorage.getItem(FS_CACHE_KEY) || '{}'); } catch { return {}; } })();
   const now = Date.now(), ttl = STORE.ol.ttl * 60e3, events = [];
   try {
@@ -4683,7 +4693,7 @@ function renderTips() {
     const mine = MI.filter(m => m.sim.ev.eventId === ev.eventId && m.team === abbr); if (!mine.length) return '';
     const T = mine.reduce((a, m) => a + m.p, 0), st = mine.filter(m => m.lineup !== 'bench').sort((a, b) => (a.rank || 9) - (b.rank || 9) || b.p - a.p), bench = mine.filter(m => m.lineup === 'bench').reduce((a, m) => a + m.p, 0);
     const short = n => n.split(' ').filter(w => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(w)).slice(-1)[0] || n, g = mine[0]?.games || 0;
-    return `<b>${esc(abbr)}</b> scores first ${pct(T, 0)} · first-shot takers${g ? ` (last ${g})` : ''}: ${st.map(m => `<b>${m.rank || ''}.</b> ${esc(short(m.name))} ${g ? `<span class="muted">${m.shots}/${g}</span> ` : ''}${pct(m.p / T, 0)}`).join(' · ')}${bench > 0 ? ` · bench ${pct(bench / T, 0)}` : ''}`;
+    return `<b>${esc(abbr)}</b> scores first ${pct(T, 0)} · first-shot takers${g ? ` (last ${g})` : ''}: ${st.map(m => `<b>${m.rank || ''}.</b> ${esc(short(m.name))} ${g ? `<span class="muted">${m.shots}/${g}</span> ` : ''}<span class="sky" title="model % to score the game's first basket (${pct(m.p / T, 0)} of his team's chance)">${pct(m.p)}</span>`).join(' · ')}${bench > 0 ? ` · bench ${pct(bench)}` : ''}`;
   };
   const rec = j => j ? `${esc(j.name)} <span class="mono muted">${j.w}-${j.n - j.w}</span>${j.usual < j.of ? ` <span class="xs muted">(jumped ${j.usual} of last ${j.of})</span>` : ''}` : '<span class="muted">unknown</span>';
   const cards = evs.map(ev => {
@@ -4701,7 +4711,7 @@ function renderTips() {
   }).join('');
   el.innerHTML = `<details class="inset" open><summary class="b">🏀 NBA tip-off: who wins the jump, gets the ball first, and scores first</summary>
     <div class="ol-grid" style="margin-top:.5rem">${cards}</div>
-    <div class="note">From the opening jump balls in ${TS.games} recent NBA box scores. Each team's jumper is whoever usually jumps for them (limited to tonight's official starters once posted); records (W-L) are shrunk toward 50% because samples are small. The team that wins the tip scores first ${pct(TS.rFirst, 0)} of the time in these games, which feeds the first-basket model. Bottom lines: each team's chance to score the first basket, its starters ranked 1-5 by how often they took the team's first shot in recent games (shots / games), and each one's share of the team's first-basket chance (75% that data, 25% scoring projection).</div></details>`;
+    <div class="note">From the opening jump balls in ${TS.games} recent NBA box scores. Each team's jumper is whoever usually jumps for them (limited to tonight's official starters once posted); records (W-L) are shrunk toward 50% because samples are small. The team that wins the tip scores first ${pct(TS.rFirst, 0)} of the time in these games, which feeds the first-basket model. Bottom lines: each team's chance to score the first basket, its starters ranked 1-5 by how often they took the team's first shot in recent games (shots / games), and each one's model % to score the game's first basket (75% that data, 25% scoring projection).</div></details>`;
 }
 function renderFirst() {
   renderTips();
