@@ -1746,6 +1746,10 @@ async function fetchGamelog(sport, pid) {
   REG.logs[`${sport}:${pid}`] = { t: Date.now(), games: parseGamelog(d) };
 }
 function logVal(sport, g, market) {
+  if (market === 'nba_dd') {   // double-double chart value: the 2nd-best of points / rebounds / assists (DD when it's 10+)
+    const v = ['nba_pts', 'nba_reb', 'nba_ast'].map(m => statFrom(g.names, g.stats, LOG_STATS[m]));
+    return v.some(x => x === null) ? null : v.sort((a, b) => b - a)[1];
+  }
   return LOG_SUMS[market] ? LOG_SUMS[market].reduce((a, m) => a === null ? null : (v => v === null ? null : a + v)(statFrom(g.names, g.stats, LOG_STATS[m])), 0)
     : market === 'anytime_td' ? (v => v === null ? null : (v > 0 ? 1 : 0))(['rushingTouchdowns', 'receivingTouchdowns'].reduce((a, k) => { const v = statFrom(g.names, g.stats, [k]); return v === null ? a : (a ?? 0) + v; }, null))
     : LOG_STATS[market] ? statFrom(g.names, g.stats, LOG_STATS[market]) : null;
@@ -1924,7 +1928,7 @@ function derivedMarkets(rows, sport) {
     if (P && R && A) {
       mk(P, 'nba_pr', 'Pts + Reb', sumN(P, R)); mk(P, 'nba_pa', 'Pts + Ast', sumN(P, A)); mk(P, 'nba_ra', 'Reb + Ast', sumN(R, A));
       const ten = r => 1 - normCdf((9.5 - r.mean) / Math.max(r.sd, 0.8)), pp = ten(P), pr = ten(R), pa = ten(A);
-      mk(P, 'nba_dd', 'Double-Double', { binary: true, prob: clamp(pp * pr + pp * pa + pr * pa - 2 * pp * pr * pa, 0.003, 0.97), dist: undefined });
+      mk(P, 'nba_dd', 'Double-Double', { binary: true, prob: clamp(pp * pr + pp * pa + pr * pa - 2 * pp * pr * pa, 0.003, 0.97), dist: undefined, comps: [P, R, A].map(r => ({ mean: r.mean, sd: Math.max(r.sd || 1, 0.8) })) });
       // blocks / steals: the player's own recent per-game rate (game logs), pulled toward a league-average prior
       for (const [m, label, prior] of [['nba_blk', 'Blocks', 0.5], ['nba_stl', 'Steals', 0.8]]) {
         const lg = logSeries(sport, pid, m);
@@ -3831,7 +3835,7 @@ function renderOutliers() {
   if (!rows.length) { $('olBody').innerHTML = errs + (nG ? '<div class="inset xs muted">No outliers match. Try a lower minimum EV or a wider odds range.</div>' : ''); return; }
   const chartRow = OL.chart ? OL.rows.find(r => r.id === OL.chart) : null, chartX = chartRow ? paFromOutlier(chartRow) : null;
   PA.cw = $('olBody').clientWidth || 600;
-  const chartBox = chartRow ? `<div class="inset pa-detail-box" style="margin-bottom:.6rem">${chartX ? paDetail(chartX) : `<div class="xs muted">No game log for ${esc(chartRow.player)} yet: the model needs this sport's rosters and game logs (scan with this sport picked at the top).</div>`}<div style="text-align:right;margin-top:.3rem"><button type="button" class="xs" data-olchartclose>Close ✕</button></div></div>` : '';
+  const chartBox = chartRow ? `<div class="inset pa-detail-box" style="margin-bottom:.6rem">${chartX && chartX.r ? paDetail(chartX) : chartX?.loading ? `<div class="xs muted">Loading ${esc(chartRow.player)}'s game log from ESPN…</div>` : `<div class="xs muted">Couldn't find ${esc(chartRow.player)} on a loaded ${esc(chartRow.sport)} roster yet (scan with ${esc(chartRow.sport)} picked at the top).</div>`}<div style="text-align:right;margin-top:.3rem"><button type="button" class="xs" data-olchartclose>Close ✕</button></div></div>` : '';
   $('olBody').innerHTML = errs + chartBox + `<div class="ol-grid">${rows.map(r => {
     const when = new Date(r.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     const sus = r.ev > 0.5;
@@ -3847,7 +3851,7 @@ function renderOutliers() {
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(r.fairOdds)} (${pct(r.pWin)}) · ${r.nBooks} books${age}</div>
       <div class="row between xs" style="margin-top:.4rem">
         <span>${r.modelP !== null ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
-        <span class="row" style="gap:.35rem">${r.pid && r.mm && r.side !== 'Yes' ? `<button type="button" class="xs ${OL.chart === r.id ? 'on' : ''}" data-olchart="${esc(r.id)}">📈 Chart</button>` : ''}<button type="button" class="${tracked(r.id) ? 'on' : 'btn-soft'}" data-track="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓ Tracked' : '+ Track bet'}</button></span>
+        <span class="row" style="gap:.35rem">${r.mm && (r.side !== 'Yes' || r.mm === 'nba_dd') ? `<button type="button" class="xs ${OL.chart === r.id ? 'on' : ''}" data-olchart="${esc(r.id)}">📈 Chart</button>` : ''}<button type="button" class="${tracked(r.id) ? 'on' : 'btn-soft'}" data-track="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓ Tracked' : '+ Track bet'}</button></span>
       </div>
       ${r.stale ? `<div class="xs amber" style="margin-top:.3rem">⚠ Possibly stale: ${r.lagMin !== null && r.lagMin > 10 ? `this book updated ${Math.round(r.lagMin)} min before the others` : `price is ${Math.round(r.ageMin)} min old`}.</div>` : ''}
       ${sus ? '<div class="xs amber" style="margin-top:.3rem">Unusually large edge: often a stale or wrong line that books limit or void.</div>' : ''}
@@ -4744,7 +4748,8 @@ function paRows() {
 function paChart(x, L) {
   const games = [...x.logs].reverse(), n = games.length;
   if (!n) return '<div class="xs muted">No games played this season yet.</div>';
-  const W = Math.max(n * 26 + 40, Math.min(Math.max(300, (PA.cw || 600) - 30), 1100)), H = 190, top = 18, base = 150, maxV = Math.max(...games.map(g => g.v), L, x.proj) * 1.12 || 1;
+  const projV = x.proj ?? null;
+  const W = Math.max(n * 26 + 40, Math.min(Math.max(300, (PA.cw || 600) - 30), 1100)), H = 190, top = 18, base = 150, maxV = Math.max(...games.map(g => g.v), L, projV ?? 0) * 1.12 || 1;
   const y = v => base - (v / maxV) * (base - top), bw = Math.min(34, (W - 40) / n - 6);
   const lastTen = new Set(games.slice(-10).map((g, i) => n - Math.min(10, n) + i));
   const bars = games.map((g, i) => {
@@ -4759,22 +4764,32 @@ function paChart(x, L) {
     ${bars}
     <line x1="24" x2="${W - 6}" y1="${y(L).toFixed(1)}" y2="${y(L).toFixed(1)}" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="5 4"/>
     <text x="4" y="${(y(L) + 3).toFixed(1)}" font-size="10" fill="var(--amber)">${fmtN(L)}</text>
-    <line x1="24" x2="${W - 6}" y1="${y(x.proj).toFixed(1)}" y2="${y(x.proj).toFixed(1)}" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2 3" opacity="0.8"/>
+    ${projV === null ? '' : `<line x1="24" x2="${W - 6}" y1="${y(projV).toFixed(1)}" y2="${y(projV).toFixed(1)}" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2 3" opacity="0.8"/>`}
   </svg>`;
+}
+function paProb(r, L) {
+  if (!r || r.noModel) return null;
+  if (r.market === 'nba_dd' && r.comps) {
+    const k = Math.floor(L) + 1, [a, b, c] = r.comps.map(q => clamp(1 - normCdf((k - 0.5 - q.mean) / q.sd), 0, 1));
+    const over = a * b + a * c + b * c - 2 * a * b * c; return { over, under: 1 - over };
+  }
+  if (r.binary) return null;
+  return probAtLine(r, L);
 }
 function paDetail(x) {
   const id = x.key || x.r.id, step = 0.5, vals = x.logs.map(g => g.v);
   PA.cur[id] = x;
-  const lo = Math.max(0, Math.floor(Math.min(x.proj, ...(vals.length ? vals : [x.proj])) - 4)), hi = Math.ceil(Math.max(x.proj, x.line ?? 0, ...(vals.length ? vals : [x.proj])) + 4);
-  const L = PA.slide[id] ?? (x.line ?? Math.round(x.proj * 2) / 2 - (Number.isInteger(Math.round(x.proj * 2) / 2) ? 0.5 : 0));
-  const pr = probAtLine(x.r, L), pO = pr.over / Math.max(1e-9, pr.over + pr.under);
+  const ref = x.proj ?? x.line ?? (vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 10);
+  const lo = Math.max(0, Math.floor(Math.min(ref, ...(vals.length ? vals : [ref])) - 4)), hi = Math.ceil(Math.max(ref, x.line ?? 0, ...(vals.length ? vals : [ref])) + 4);
+  const L = PA.slide[id] ?? (x.line ?? Math.round(ref * 2) / 2 - (Number.isInteger(Math.round(ref * 2) / 2) ? 0.5 : 0));
+  const pr = paProb(x.r, L), pO = pr ? pr.over / Math.max(1e-9, pr.over + pr.under) : null;
   const stat = arr => { const g = arr.filter(v => v.v !== L), o = g.filter(v => v.v > L).length; return g.length ? `${o}/${g.length} <span class="muted">(${pct(o / g.length, 0)})</span>` : '—'; };
   const last10 = x.logs.slice(0, 10), lab = x.logs.length >= 10 ? 'Last 10' : `Season (${x.logs.length} games)`;
   const avg = arr => arr.length ? fmtN(arr.reduce((a, g) => a + g.v, 0) / arr.length) : '—';
   return `<div class="stack" style="gap:.5rem">
     <div class="row between xs" style="flex-wrap:wrap;gap:.5rem">
       <span><b>${esc(x.r.name)}</b> <span class="muted">${esc(x.team)} ${x.home ? 'vs' : '@'} ${esc(x.opp)} · ${esc(x.mLabel || PA_MARKETS.find(m => m[0] === STORE.pa.mkt)?.[1] || '')}</span></span>
-      <span class="muted">Projection <b class="sky">${fmtN(x.proj)}</b>${x.line !== null ? ` · ${x.lineLab ? 'card line' : 'consensus'} <b>${fmtN(x.line)}</b>` : ''} · avg ${lab.toLowerCase().startsWith('last') ? 'L10' : 'season'} ${avg(x.win)}</span>
+      <span class="muted">${x.proj === null ? (x.dd ? 'Double-double = 2 of PTS/REB/AST at 10+' : 'Game log only') : `Projection <b class="sky">${fmtN(x.proj)}</b>`}${x.line !== null ? ` · ${x.lineLab ? 'card line' : 'consensus'} <b>${fmtN(x.line)}</b>` : ''} · avg ${lab.toLowerCase().startsWith('last') ? 'L10' : 'season'} ${avg(x.win)}</span>
     </div>
     <div class="table-wrap pa-chart" style="padding-bottom:.2rem">${paChart(x, L)}</div>
     <div class="row xs" style="gap:.6rem;align-items:center;flex-wrap:wrap">
@@ -4784,12 +4799,12 @@ function paDetail(x) {
       ${x.line !== null ? `<button type="button" class="xs" data-pareset="${esc(id)}">Reset to ${fmtN(x.line)}${x.lineLab ? ` (${esc(x.lineLab)})` : ''}</button>` : ''}
     </div>
     <div class="grid g4 xs pa-stats">
-      <div class="inset"><div class="muted">Over hit · ${lab}</div><div class="b">${stat(x.win)}</div></div>
-      <div class="inset"><div class="muted">Over hit · season</div><div class="b">${stat(x.logs)}</div></div>
-      <div class="inset"><div class="muted">Over hit · last 5</div><div class="b">${stat(x.logs.slice(0, 5))}</div></div>
-      <div class="inset"><div class="muted">Model at ${fmtN(L)}</div><div class="b"><span class="${pO >= 0.5 ? 'green' : 'rose'}">O ${pct(pO, 0)}</span> / U ${pct(1 - pO, 0)} <span class="muted mono">${fmtOdds(toAmerican(Math.max(pO, 1 - pO)))}</span></div></div>
+      <div class="inset"><div class="muted">${x.dd ? 'DD hit' : 'Over hit'} · ${lab}</div><div class="b">${stat(x.win)}</div></div>
+      <div class="inset"><div class="muted">${x.dd ? 'DD hit' : 'Over hit'} · season</div><div class="b">${stat(x.logs)}</div></div>
+      <div class="inset"><div class="muted">${x.dd ? 'DD hit' : 'Over hit'} · last 5</div><div class="b">${stat(x.logs.slice(0, 5))}</div></div>
+      <div class="inset"><div class="muted">Model at ${fmtN(L)}</div><div class="b">${pO === null ? '<span class="muted">no model projection for this player</span>' : `<span class="${pO >= 0.5 ? 'green' : 'rose'}">${x.dd ? 'Yes' : 'O'} ${pct(pO, 0)}</span> / ${x.dd ? 'No' : 'U'} ${pct(1 - pO, 0)} <span class="muted mono">${fmtOdds(toAmerican(Math.max(pO, 1 - pO)))}</span>`}</div></div>
     </div>
-    <div class="xs muted">Bars: each game this season (bright = the last 10), green above the line, red below, grey = exactly on it. Amber dashes = the slider line, blue dots = tonight's projection. Slide to check alt lines.</div>
+    <div class="xs muted">${x.dd ? 'Bars: his 2nd-best of points / rebounds / assists each game (a double-double when it reaches 10, i.e. above the 9.5 line). ' : 'Bars: each game this season '}(bright = the last 10), green above the line, red below, grey = exactly on it. Amber dashes = the slider line${x.proj === null ? '' : ', blue dots = tonight\'s projection'}. Slide to check ${x.dd ? 'other thresholds' : 'alt lines'}.</div>
   </div>`;
 }
 function renderAnalyzer() {
@@ -4844,16 +4859,30 @@ document.addEventListener('click', e => {
 });
 // the same analysis for a prop outlier card: model row + this season's game log, slider starts at the card's line
 function paFromOutlier(o) {
-  if (!o.pid || !o.mm || o.side === 'Yes') return null;
+  const mm = o.mm; if (!mm) return null;
+  const dd = mm === 'nba_dd'; if (o.side === 'Yes' && !dd) return null;
+  const pack = (m, sim, pid, team, ev) => {
+    const logs = logAll(o.sport, pid, mm) || [];
+    const home = ev ? team === ev.homeAbbr : false;
+    return { key: `ol|${o.id}`, r: m, sim, line: dd ? 9.5 : o.line, lineLab: dd ? `${o.price > 0 ? '+' : ''}${o.price} yes, ${o.book}` : `${o.side === 'O' ? 'Over' : 'Under'} ${fmtOdds(o.price)} ${o.book}`,
+      proj: dd || m.noModel ? null : m.mean, team, opp: ev ? (home ? ev.awayAbbr : ev.homeAbbr) : '', home, logs, win: logs.length >= 10 ? logs.slice(0, 10) : logs, mLabel: o.mLabel, dd };
+  };
+  // 1) the model projects him
   for (const sim of APP.simCache.values()) {
     if (sim.ev.sport !== o.sport) continue;
-    const m = [...(sim.players || []), ...(sim.players?.derived || [])].find(p => String(p.playerId) === String(o.pid) && p.market === o.mm);
-    if (!m || m.binary || !(m.mean > 0)) continue;
-    const logs = logAll(o.sport, o.pid, o.mm) || [];
-    return { key: `ol|${o.id}`, r: m, sim, line: o.line, lineLab: `${o.side === 'O' ? 'Over' : 'Under'} ${fmtOdds(o.price)} ${o.book}`, proj: m.mean, team: m.team,
-      opp: m.team === sim.ev.homeAbbr ? sim.ev.awayAbbr : sim.ev.homeAbbr, home: m.team === sim.ev.homeAbbr, logs, win: logs.length >= 10 ? logs.slice(0, 10) : logs, mLabel: o.mLabel };
+    const m = [...(sim.players || []), ...(sim.players?.derived || [])].find(p => (o.pid ? String(p.playerId) === String(o.pid) : normName(p.name) === normName(o.player)) && p.market === mm);
+    if (m && (dd || (!m.binary && m.mean > 0))) return pack(m, sim, m.playerId, m.team, sim.ev);
   }
-  return null;
+  // 2) no projection (outside the main rotation, or a spelling the model didn't match): ESPN game log only
+  const P = fsResolver([...REG.players.values()].filter(p => p.sport === o.sport).map(p => ({ name: p.playerName, value: p })))(o.player);
+  if (!P) return { missing: true };
+  const k = `${o.sport}:${P.playerId}`;
+  if (!REG.logs[k]) {
+    if (!PA.fetching?.[k]) { (PA.fetching ||= {})[k] = true; fetchGamelog(o.sport, P.playerId).catch(() => { REG.logs[k] = { t: Date.now(), games: [] }; }).finally(() => { if (APP.view === 'outliers' && OL.chart === o.id) renderOutliers(); }); }
+    return { loading: true };
+  }
+  const ev = [...REG.events.values()].find(e => e.sport === o.sport && e.state === 'pre' && (String(e.awayTeamId) === String(P.teamId) || String(e.homeTeamId) === String(P.teamId)));
+  return pack({ id: '', name: P.playerName, team: P.teamAbbr, market: mm, noModel: true }, null, P.playerId, P.teamAbbr, ev);
 }
 function bindAnalyzer() {
   $('paMkts').addEventListener('click', e => { const b = e.target.closest('[data-pamkt]'); if (!b) return; STORE.pa.mkt = b.dataset.pamkt; PA.open = null; save(); renderAnalyzer(); });
