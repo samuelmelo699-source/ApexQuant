@@ -3991,19 +3991,26 @@ async function apsGet(path, params) {
   return j;
 }
 const decToAm = d => { d = +d; if (!(d > 1.0001)) return null; return d >= 2 ? Math.round((d - 1) * 100) : Math.round(-100 / (d - 1)); };
-async function apsCBA() {
+async function apsCBA(fresh = false) {
+  const F = fresh ? { fresh: 1 } : {};
   const lj = await apsGet('leagues', { country: 'China' });
   const lg = (lj.response || []).find(l => /^cba$|chinese basketball association/i.test(l.name || ''));
   if (!lg) throw new Error(`API-Sports doesn't list the CBA (China leagues: ${(lj.response || []).map(l => l.name).join(', ') || 'none'}).`);
-  const season = (lg.seasons || []).map(x => String(x.season)).sort().pop();
-  const gj = await apsGet('games', { league: lg.id, season, timezone: 'UTC' });
+  // the season whose dates include today (else the newest)
+  const today = new Date().toISOString().slice(0, 10), ss = (lg.seasons || []).slice().sort((a, b) => String(a.season).localeCompare(String(b.season)));
+  const season = String((ss.find(x => x.start && x.end && x.start <= today && today <= x.end) || ss[ss.length - 1] || {}).season || '');
+  const gj = await apsGet('games', { league: lg.id, season, timezone: 'UTC', ...F });
   const games = new Map((gj.response || []).map(g => [g.id, g])), now = Date.now(), list = [];
+  const dbg = { league: `${lg.name} #${lg.id}`, season, games: games.size, upcoming: [...games.values()].filter(g => Date.parse(g.date) > now).length, oddsGames: 0, matched: 0, betNames: new Set(), books: new Set() };
   let page = 1, total = 1;
   do {
-    const oj = await apsGet('odds', { league: lg.id, season, ...(page > 1 ? { page } : {}) });
+    const oj = await apsGet('odds', { league: lg.id, season, ...(page > 1 ? { page } : {}), ...F });
     total = oj.paging?.total || 1;
     for (const o of oj.response || []) {
+      dbg.oddsGames++;
+      for (const b of o.bookmakers || []) { dbg.books.add(b.name); for (const bet of b.bets || []) dbg.betNames.add(bet.name); }
       const g = games.get(o.game?.id); if (!g) continue;
+      dbg.matched++;
       const start = Date.parse(g.date); if (!(start > now)) continue;
       const H = g.teams?.home?.name, A = g.teams?.away?.name; if (!H || !A) continue;
       const bookmakers = (o.bookmakers || []).map(b => {
@@ -4024,7 +4031,8 @@ async function apsCBA() {
     }
     page++;
   } while (page <= Math.min(total, 3));
-  return { list, season, name: lg.name };
+  dbg.withLines = list.length;
+  return { list, season, name: lg.name, dbg: { ...dbg, betNames: [...dbg.betNames].slice(0, 8), books: [...dbg.books].slice(0, 8) } };
 }
 async function booksOnlyKey(sp) {
   const c = STORE.boKeys?.[sp];
@@ -4250,13 +4258,13 @@ async function gloScan(force = false) {
         if (!SERVER.aps) throw new Error(`The Odds API doesn't carry the ${BOOKS_ONLY[sport].name}${k.bball?.length ? ` (its basketball leagues: ${k.bball.join(', ')})` : ''}. ${SERVER.on ? 'Add APISPORTS_KEY in Netlify (then redeploy) to use API-Sports for CBA odds.' : 'CBA odds come from API-Sports through the background server, which needs the GitHub deploy.'}`);
         const cc = GL.data[sport];
         if (!force && cc?.src === 'API-Sports' && Date.now() - cc.t < 30 * 60e3) c = cc;
-        else { const r = await apsCBA(); c = GL.data[sport] = { t: Date.now(), list: r.list, src: 'API-Sports', note: `${r.name} ${r.season}` }; }
+        else { const r = await apsCBA(force); c = GL.data[sport] = { t: Date.now(), list: r.list, src: 'API-Sports', note: `${r.name} ${r.season}`, dbg: r.dbg }; }
       } else if (!k.active) throw new Error(`The odds feed lists ${k.title} but it's out of season right now (no games posted).`);
     }
     if (!c) c = await glFetch(sport, force);
     if (!c) throw new Error('No game lines available yet.');
     GLO.rows = GLO.rows.filter(r => r.sport !== sport).concat(gloCompute(sport, c));
-    GLO.msg[sport] = { t: c.t, server: c.server, src: c.src, n: (c.list || []).filter(e => Date.parse(e.commence_time) > Date.now()).length };
+    GLO.msg[sport] = { t: c.t, server: c.server, src: c.src, dbg: c.dbg, n: (c.list || []).filter(e => Date.parse(e.commence_time) > Date.now()).length };
   } catch (e) { GLO.err = e.message; }
   GLO.busy = false; renderGLO();
 }
@@ -4286,6 +4294,7 @@ function renderGLO() {
   $('gloStatus').innerHTML = (GLO.err ? `<div class="banner bad">${esc(GLO.err)}</div>` : '') + (m
     ? `${spLabel(sport)}: ${m.n} games · lines from ${m.server ? 'the background job' : m.src ? `${m.src} (international books, decimal odds converted)` : 'the books'} at ${hhmm(m.t)}${m.server || m.src ? ' (no Odds API credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
     : `<span class="muted">Press Load to price ${spLabel(sport)} ${isSoc(sport) || BOOKS_ONLY[sport] ? 'moneylines and over/unders' : `moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals`}. ${BOOKS_ONLY[sport] ? 'Odds come from API-Sports (the current season needs a paid API-Sports plan); about 3 API-Sports requests per load, cached 30 min.' : `About ${isSoc(sport) ? 2 : 3} credits, or free if the lines were downloaded in the last 30 min.`}</span>`);
+  if (m?.dbg && !m.n) { const d = m.dbg; $('gloStatus').innerHTML += `<div class="xs muted" style="margin-top:.3rem">API-Sports check: ${esc(d.league)} season ${esc(d.season)} · ${d.games} games in the schedule, ${d.upcoming} still to play · odds posted for ${d.oddsGames} games (${d.matched} matched, ${d.withLines} with moneyline/over-under)${d.betNames.length ? ` · bet types: ${esc(d.betNames.join(', '))}` : ''}${d.books.length ? ` · books: ${esc(d.books.join(', '))}` : ''}</div>`; }
   if (!m) { $('gloBody').innerHTML = ''; return; }
   if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline, spread or total outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
   $('gloBody').innerHTML = `<div class="ol-grid">${rows.map(r => {
