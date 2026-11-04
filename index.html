@@ -199,7 +199,7 @@
       <button type="button" data-view="props" data-needs-props>🎯 Prop finder</button>
       <button type="button" data-view="ratings">📊 Team ratings</button>
       <button type="button" data-view="outliers">🔥 Prop outliers</button>
-      <button type="button" data-view="first">🥇 First scorer</button>
+      <button type="button" data-view="first">🥇 First basket</button>
       <button type="button" data-view="tracker">📒 Bet tracker</button>
       <button type="button" data-view="audit">🛡️ Roster audit</button>
     </nav>
@@ -453,7 +453,7 @@
     <div class="card stack">
       <div class="row between">
         <div>
-          <h2 class="sm xb">🥇 First scorer · NFL first TD &amp; NBA first basket</h2>
+          <h2 class="sm xb">🥇 First basket · NBA</h2>
           <p class="note" style="margin:0">Every book's first-scorer board from your Odds API key. Each book's prices are de-vigged across the whole field (power method, which strips the extra margin books put on long shots). The best price for each player is then compared with the other books' consensus. Ranked by expected value.</p>
         </div>
         <div class="row"><button type="button" id="fsScanBtn" class="btn-go">Scan</button><button type="button" id="fsRefreshBtn" title="Ignore cache and re-download (uses credits)">↻ Force refresh</button></div>
@@ -461,8 +461,7 @@
       <div class="inset grid g4 xs">
         <div><label class="muted" for="fsKey">The Odds API key</label><input id="fsKey" type="password" autocomplete="off" placeholder="paste key" style="width:100%">
           <div class="note">Same key as Prop outliers. It's stored only in this browser.</div></div>
-        <div><span class="muted">Sports</span><div class="row" id="fsSports" style="margin-top:.3rem">
-            <label class="row"><input type="checkbox" value="NFL"> 🏈 First TD</label><label class="row"><input type="checkbox" value="NBA"> 🏀 First basket</label></div>
+        <div><span class="muted">Market</span><div class="row" id="fsSports" style="margin-top:.3rem"><span>🏀 NBA first basket</span></div>
           <label class="row" style="margin-top:.3rem"><input type="checkbox" id="fsOnlyPos"> Only +EV prices</label></div>
         <div class="g2s">
           <div><label class="muted" for="fsMinEV">Min EV %</label><input id="fsMinEV" type="number" step="1" class="mono"></div>
@@ -472,9 +471,10 @@
       </div>
       <div class="note" id="fsCost"></div>
       <div class="xs" id="fsStatus"></div>
+      <div id="fsTips"></div>
       <div id="fsBest"></div>
       <div id="fsBody" class="stack"></div>
-      <p class="note" style="margin:0">Rules to know. NFL: if the first TD is scored by a defense or special teams, or nobody scores a TD, every player bet loses. NBA: most books settle on the first <i>field goal</i>, so free throws don't count. Check your book. A player who doesn't play is usually voided. "Model" is this app's own estimate from the simulation: share of team TDs (NFL), or share of starters' points × chance the team scores first (NBA).</p>
+      <p class="note" style="margin:0">Rules to know: most books settle on the first <i>field goal</i>, so free throws don't count. Check your book. A player who doesn't play is usually voided. "Model" = 75% data + 25% projection. Data: the chance his team wins the tip and scores first (opening jump balls in recent games) × how often he takes his team's first shot among tonight's five starters (recent play-by-play). Projection: his share of the starters' projected scoring.</p>
     </div>
   </section>
 
@@ -1952,6 +1952,26 @@ function parseBox(sport, d) {
   if (teams.length !== 2 || !comp.status?.type?.completed && !d.header?.competitions?.[0]?.status?.type?.completed) return null;
   const other = id => teams.find(t => t.id !== String(id))?.id;
   const B = { t: Date.now(), date: comp.date || '', teams, refs: (d.gameInfo?.officials || []).map(o => o.displayName || o.fullName).filter(Boolean).slice(0, 4), allowed: {}, fouls: {}, fta: {} };
+  if (sport === 'NBA') {   // opening tip: the two jumpers (with their teams), who got the ball, who made the first field goal
+    B.tip = null;
+    const teamOfAth = {}, nameOfAth = {};
+    for (const blk of d.boxscore?.players || []) for (const st of blk.statistics || []) for (const a of st.athletes || []) if (a.athlete?.id) { teamOfAth[String(a.athlete.id)] = String(blk.team?.id || ''); nameOfAth[String(a.athlete.id)] = a.athlete.displayName || a.athlete.shortName || ''; }
+    const plays = d.plays || [], jb = plays.slice(0, 6).find(p => /jump ?ball/i.test(p.type?.text || '') && (p.period?.number ?? 1) === 1);
+    if (jb) {
+      const ids = (jb.participants || []).map(x => String(x.athlete?.id || '')).filter(Boolean), jumpers = ids.slice(0, 2).filter(id => teamOfAth[id]);
+      const poss = String(jb.team?.id || teamOfAth[ids[2]] || '');
+      const fg = plays.find(p => p.scoringPlay && (p.scoreValue ?? 2) >= 2);
+      if (jumpers.length === 2 && poss) B.tip = { j: jumpers.map(id => ({ id, t: teamOfAth[id], n: nameOfAth[id] })), poss, first: fg ? String(fg.team?.id || '') : null };
+    }
+    B.fs = {};   // per team: who took its first field-goal attempt and who made its first field goal
+    for (const p of plays.slice(0, 80)) {
+      if (!p.shootingPlay || /free throw/i.test(p.type?.text || p.text || '')) continue;
+      const tid = String(p.team?.id || ''), sh = String(p.participants?.[0]?.athlete?.id || ''); if (!tid || !sh) continue;
+      const f = (B.fs[tid] ||= { shot: sh, make: null, starters: [] });
+      if (!f.make && p.scoringPlay) f.make = sh;
+    }
+    for (const blk of d.boxscore?.players || []) { const tid = String(blk.team?.id || ''); if (!B.fs[tid]) continue; const ids = new Set(); for (const st of blk.statistics || []) for (const a of st.athletes || []) if (a.starter && a.athlete?.id) ids.add(String(a.athlete.id)); B.fs[tid].starters = [...ids]; }
+  }
   for (const ts of d.boxscore?.teams || []) {
     const id = String(ts.team?.id || ''), f = ts.statistics?.find(x => x.name === 'fouls'), ft = ts.statistics?.find(x => /freeThrowsMade-freeThrowsAttempted/.test(x.name || ''));
     if (f) B.fouls[id] = num(f.displayValue); if (ft) B.fta[id] = num(String(ft.displayValue).split('-')[1]);
@@ -1988,7 +2008,7 @@ function parseBox(sport, d) {
 async function ensureBoxes(events, perTeam = 6) {
   const sport = events[0]?.sport; if (!['NBA', 'NFL', 'NHL'].includes(sport) || BOX.busy) return 0;
   const c = boxCache(), want = new Set();
-  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && !c[`${sport}:${g.id}`]) want.add(g.id);
+  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && (!c[`${sport}:${g.id}`] || (sport === 'NBA' && (c[`${sport}:${g.id}`].tip === undefined || c[`${sport}:${g.id}`].fs === undefined)))) want.add(g.id);
   if (!want.size) return 0;
   BOX.busy = true;
   const queue = [...want]; let n = 0;
@@ -4422,10 +4442,10 @@ function bindGLO() {
    NFL leaves ~7% for defense/special-teams TDs and ~1.5% for no TD unless the book lists
    them). Fair for a price = sharp-weighted median of the OTHER books' fair probabilities.
    ===================================================================== */
-const FS_MKT = { NFL: { key: 'player_1st_td', label: 'First TD scorer', hold: 1.30 }, NBA: { key: 'player_first_basket', label: 'First basket', hold: 1.25 } };
-const FS_KEYS = new Set(Object.values(FS_MKT).map(m => m.key));
-const FS_DAYS = { NFL: 7, NBA: 2 };
-STORE.fs = { sports: ['NFL', 'NBA'], minEV: 0, minBooks: 2, onlyPos: false, q: '', ...(STORE.fs || {}) };
+const FS_MKT = { NBA: { key: 'player_first_basket', label: 'First basket', hold: 1.25 } };   // NBA only (NFL first TD removed)
+const FS_KEYS = new Set(['player_first_basket', 'player_1st_td']);   // (old first-TD bets still grade)
+const FS_DAYS = { NBA: 2 };
+STORE.fs = { minEV: 0, minBooks: 2, onlyPos: false, q: '', ...(STORE.fs || {}) }; STORE.fs.sports = ['NBA'];
 const FS = { data: new Map(), rows: [], busy: false, errors: [] };
 const FS_CACHE_KEY = 'apexquant.fscache';
 const fsIsNone = s => /\bno\s*(touchdown|td|scorer|basket)|^none$/i.test(s);
@@ -4480,39 +4500,92 @@ function fsConsensus(g, exclude) {
   if (!xs.length) return null;
   return { p: wMedian(xs.map(x => x[1]), xs.map(x => bookW(x[0]))), n: xs.length };
 }
-// Model: NFL → P(first TD) = λ_i/Λ × (1 − e^−Λ); NBA → P(team scores first) × player's share of starters' points.
+// Model (NBA first basket): 75% data (tip-off + first-shot takers) + 25% projection (scoring share).
 function fsModelIndex() {
   const idx = new Map();
   for (const sim of APP.simCache.values()) {
     const sp = sim.ev.sport, rows = sim.players || [];
-    if (sp === 'NFL') {
-      const Lam0 = (sim.avgAway + sim.avgHome) * 0.105;
-      const lam = rows.filter(r => r.market === 'anytime_td').map(r => ({ r, l: -Math.log(1 - r.prob) }));
-      const Lam = Math.max(Lam0, lam.reduce((a, x) => a + x.l, 0) / 0.93);
-      for (const { r, l } of lam) idx.set(`NFL|${r.eventId}|${r.name}`, { p: l / Lam * (1 - Math.exp(-Lam)), team: r.team, name: r.name, sim });
-    } else if (sp === 'NBA') {
-      // First basket = one of the 10 starters almost every game. Starting fives: ESPN's official lineup once posted
-      // (~30 min before tip), otherwise the projected five from the depth chart. Starters share ~94% of their team's
-      // chance (weighted by projected scoring), the bench splits the rest.
+    if (sp === 'NBA') {
+      // 75% DATA + 25% PROJECTION.
+      // Data: P(team scores first) from the tip-off (jump records) × P(player takes the team's first shot) from recent
+      //   play-by-play, among tonight's five starters (official lineup once posted, else the projected five).
+      // Projection: P(team scores first) incl. team strength × the player's share of the starters' projected scoring.
       const pts = rows.filter(r => r.market === 'nba_pts');
       const official = REG.pregame[`NBA:${sim.ev.eventId}`]?.starters || {};
+      const TS = tipStats(), tip = tipFor(sim.ev, TS);
       for (const side of ['away', 'home']) {
         const abbr = side === 'away' ? sim.ev.awayAbbr : sim.ev.homeAbbr, teamId = side === 'away' ? sim.ev.awayTeamId : sim.ev.homeTeamId;
-        const pTeam = 0.5 + 0.25 * ((side === 'home' ? sim.pHome : sim.pAway) - 0.5);
+        const pTipMe = side === 'home' ? tip.pHome : tip.pAway, pWinMe = side === 'home' ? sim.pHome : sim.pAway;
+        const pTeamData = pTipMe * tip.rFirst + (1 - pTipMe) * (1 - tip.rFirst);
+        const pTeamProj = clamp(pTeamData + 0.1 * (pWinMe - 0.5), 0.2, 0.8);
         const conf = official[String(teamId)];
         let five = new Set((conf || []).map(String));
         if (!five.size) try { five = new Set(buildSlots('NBA', teamId, sim.ev).filter(x => x.player && x.slot !== '6TH').map(x => String(x.player.playerId))); } catch {}
-        const mine = pts.filter(r => r.team === abbr).map(r => ({ r, start: five.has(String(r.playerId)), w: Math.pow(Math.max(r.mean, 0.5), 1.15) }));
+        const mine = pts.filter(r => r.team === abbr).map(r => ({ r, id: String(r.playerId), start: five.has(String(r.playerId)), w: Math.pow(Math.max(r.mean, 0.5), 1.15) }));
         const st = mine.filter(x => x.start), bn = mine.filter(x => !x.start);
+        // projection share
         const Ws = st.reduce((a, x) => a + x.w, 0), Wb = bn.reduce((a, x) => a + x.w, 0), share = st.length ? (bn.length ? 0.94 : 1) : 0;
+        const proj = x => st.length ? (x.start ? share * x.w / Ws : (1 - share) * x.w / Wb) : x.w / (Ws + Wb);
+        // data share: who took this team's first shot in recent games (+1 smoothing per starter); bench gets its own (rare) count
+        const FS = firstShotStats(teamId);
+        const benchCnt = Object.entries(FS.cnt).filter(([id]) => !st.some(x => x.id === id)).reduce((a, [, v]) => a + v, 0);
+        const Wd = st.reduce((a, x) => a + (FS.cnt[x.id] || 0) + 1, 0) + (bn.length ? benchCnt + 0.5 : 0);
+        const data = x => !st.length ? proj(x) : x.start ? ((FS.cnt[x.id] || 0) + 1) / Wd : ((benchCnt + 0.5) / Wd) * (Wb ? x.w / Wb : 0);
+        const rank = new Map([...st].sort((a, b) => (FS.cnt[b.id] || 0) - (FS.cnt[a.id] || 0) || b.w - a.w).map((x, i) => [x.id, i + 1]));
         for (const x of mine) {
-          const p = st.length ? (x.start ? share * x.w / Ws : (1 - share) * x.w / Wb) : x.w / (Ws + Wb);
-          idx.set(`NBA|${x.r.eventId}|${x.r.name}`, { p: pTeam * 0.97 * p, team: x.r.team, name: x.r.name, sim, lineup: x.start ? (conf ? 'official starter' : 'projected starter') : (st.length ? 'bench' : null) });
+          const pData = pTeamData * 0.97 * data(x), pProj = pTeamProj * 0.97 * proj(x);
+          idx.set(`NBA|${x.r.eventId}|${x.r.name}`, { p: 0.75 * pData + 0.25 * pProj, pData, pProj, team: x.r.team, name: x.r.name, sim,
+            lineup: x.start ? (conf ? 'official starter' : 'projected starter') : (st.length ? 'bench' : null),
+            rank: rank.get(x.id) || null, shots: FS.cnt[x.id] || 0, games: FS.n });
         }
       }
     }
   }
   return idx;
+}
+// NBA TIP-OFF: who jumps tonight (each team's usual jumper among tonight's starters), each jumper's record in the
+// saved box scores (shrunk toward 50%), head-to-head odds, and how often the team that gets the ball first scores
+// the first basket (league rate from the same games).
+function tipStats() {
+  const c = boxCache(), jumper = {}, teamJ = {}; let games = 0, firstToPoss = 0;
+  for (const [k, b] of Object.entries(c)) {
+    if (!k.startsWith('NBA:') || !b.tip) continue;
+    games++; if (b.tip.first && b.tip.first === b.tip.poss) firstToPoss++;
+    for (const j of b.tip.j) {
+      const r = (jumper[j.id] ||= { n: 0, w: 0, name: j.n }); r.n++; if (j.t === b.tip.poss) r.w++;
+      (teamJ[j.t] ||= []).push({ id: j.id, date: b.date, name: j.n });
+    }
+  }
+  for (const t of Object.keys(teamJ)) teamJ[t].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return { jumper, teamJ, games, rFirst: (firstToPoss + 0.56 * 20) / (games + 20) };   // shrink toward the long-run ~56%
+}
+// who takes each team's first shot (recent box scores): counts per player, games, newest first
+function firstShotStats(teamId) {
+  const c = boxCache(), cnt = {}, made = {}; let n = 0;
+  for (const [k, b] of Object.entries(c)) {
+    if (!k.startsWith('NBA:') || !b.fs) continue; const f = b.fs[String(teamId)]; if (!f) continue;
+    n++; cnt[f.shot] = (cnt[f.shot] || 0) + 1; if (f.make) made[f.make] = (made[f.make] || 0) + 1;
+  }
+  return { n, cnt, made };
+}
+function tipFor(ev, TS = tipStats()) {
+  if (ev.sport !== 'NBA') return null;
+  const official = REG.pregame[`NBA:${ev.eventId}`]?.starters || {};
+  const pick = teamId => {
+    const recent = (TS.teamJ[String(teamId)] || []).slice(0, 8);
+    if (!recent.length) return null;
+    const out = new Set(teamRoster('NBA', teamId).filter(r => ['out', 'inactive'].includes(effStatus(r))).map(r => String(r.playerId)));
+    const five = official[String(teamId)] ? new Set(official[String(teamId)].map(String)) : null;
+    const count = {}; for (const r of recent) if (!out.has(r.id) && (!five || five.has(r.id))) count[r.id] = (count[r.id] || 0) + 1;
+    const id = Object.keys(count).sort((a, b) => count[b] - count[a])[0]; if (!id) return null;
+    const rec = TS.jumper[id] || { n: 0, w: 0, name: recent.find(r => r.id === id)?.name };
+    return { id, name: rec.name || recent.find(r => r.id === id)?.name || '?', w: rec.w, n: rec.n, usual: count[id], of: recent.length, rate: (rec.w + 2) / (rec.n + 4) };
+  };
+  const A = pick(ev.awayTeamId), H = pick(ev.homeTeamId);
+  let pA = 0.5;
+  if (A && H) pA = A.rate * (1 - H.rate) / (A.rate * (1 - H.rate) + H.rate * (1 - A.rate));
+  else if (A) pA = A.rate; else if (H) pA = 1 - H.rate;
+  return { pAway: pA, pHome: 1 - pA, away: A, home: H, rFirst: TS.rFirst, games: TS.games, known: Boolean(A || H) };
 }
 // Book spellings differ from ESPN ("Cameron"/"Cam", "Nicolas"/"Nic"): exact → last name + first initial → unique last name.
 function fsNameKeys(name) { const n = normName(name), parts = n.split(' '), last = parts.slice(-1)[0], fi = parts[0]?.[0] || ''; return [`x|${n}`, `li|${last}|${fi}`, `l|${last}`]; }
@@ -4542,6 +4615,7 @@ function computeFirst() {
         eventId: ev.id, label, start: ev.commence_time, player: g.player, team: m?.team || teamOf[sport](g.player) || '',
         price: bestQ.price, book: bestQ.title, bookKey: bestQ.book, pWin: fair.p, pLose: 1 - fair.p, nBooks: g.quotes.length,
         ev: ev$, stake: ev$ > 0 ? kellyStake(fair.p, 1 - fair.p, bestQ.price) : 0, modelP: m ? m.p : null, lineup: m?.lineup || null,
+        pData: m?.pData ?? null, pProj: m?.pProj ?? null, rank: m?.rank ?? null, shots: m?.shots ?? 0, fsGames: m?.games ?? 0,
         prices: [...g.quotes].sort((a, b) => payout(b.price) - payout(a.price)), t, holds: players.holds });
     }
   }
@@ -4586,6 +4660,8 @@ async function scanFirst(force = false) {
   finally { FS.busy = false; $('fsScanBtn').disabled = false; }
   // NBA: official starting fives are posted ~30 min before tip; re-check games starting within 2 hours
   if (APP.sport === 'NBA' && STORE.fs.sports.includes('NBA')) {
+    $('fsStatus').textContent = 'Loading recent NBA box scores (opening jump balls)…';
+    try { if (await ensureBoxes(eventsForSport(), 8)) APP.simCache.clear(); } catch {}
     $('fsStatus').textContent = 'Checking official NBA starting lineups…';
     const soon = eventsForSport().filter(ev => ev.state === 'pre' && new Date(ev.start).getTime() - Date.now() < 2 * 3600e3);
     try { if (soon.length && await ensurePregame(soon, true)) APP.simCache.clear(); } catch {}
@@ -4593,7 +4669,42 @@ async function scanFirst(force = false) {
   computeFirst();
   renderFirst();
 }
+// NBA tip-off table: likely jumpers, their records, who wins the tip / gets the ball first, who scores first
+function renderTips() {
+  const el = $('fsTips'); if (!el) return;
+  if (!STORE.fs.sports.includes('NBA')) { el.innerHTML = ''; return; }
+  const evs = [...REG.events.values()].filter(e => e.sport === 'NBA' && e.state === 'pre').sort((a, b) => new Date(a.start) - new Date(b.start)).slice(0, 15);
+  if (!evs.length) { el.innerHTML = ''; return; }
+  const TS = tipStats();
+  if (!TS.games) { el.innerHTML = '<div class="inset xs muted">🏀 Tip-off odds appear once recent NBA box scores are loaded: pick NBA at the top and press Scan.</div>'; return; }
+  let MI = []; try { MI = [...fsModelIndex().values()].filter(m => m.sim.ev.sport === 'NBA'); } catch {}
+  // who takes each team's share of the first basket (starters by projected scoring, bench lumped together)
+  const shares = (ev, abbr) => {
+    const mine = MI.filter(m => m.sim.ev.eventId === ev.eventId && m.team === abbr); if (!mine.length) return '';
+    const T = mine.reduce((a, m) => a + m.p, 0), st = mine.filter(m => m.lineup !== 'bench').sort((a, b) => (a.rank || 9) - (b.rank || 9) || b.p - a.p), bench = mine.filter(m => m.lineup === 'bench').reduce((a, m) => a + m.p, 0);
+    const short = n => n.split(' ').filter(w => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(w)).slice(-1)[0] || n, g = mine[0]?.games || 0;
+    return `<b>${esc(abbr)}</b> scores first ${pct(T, 0)} · first-shot takers${g ? ` (last ${g})` : ''}: ${st.map(m => `<b>${m.rank || ''}.</b> ${esc(short(m.name))} ${g ? `<span class="muted">${m.shots}/${g}</span> ` : ''}${pct(m.p / T, 0)}`).join(' · ')}${bench > 0 ? ` · bench ${pct(bench / T, 0)}` : ''}`;
+  };
+  const rec = j => j ? `${esc(j.name)} <span class="mono muted">${j.w}-${j.n - j.w}</span>${j.usual < j.of ? ` <span class="xs muted">(jumped ${j.usual} of last ${j.of})</span>` : ''}` : '<span class="muted">unknown</span>';
+  const cards = evs.map(ev => {
+    const t = tipFor(ev, TS), homeFav = t.pHome >= t.pAway, fav = homeFav ? ev.homeAbbr : ev.awayAbbr, pf = Math.max(t.pHome, t.pAway);
+    const sf = pf * t.rFirst + (1 - pf) * (1 - t.rFirst);
+    const when = new Date(ev.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    const posted = Object.keys(REG.pregame[`NBA:${ev.eventId}`]?.starters || {}).length > 0;
+    const split = [shares(ev, ev.awayAbbr), shares(ev, ev.homeAbbr)].filter(Boolean);
+    return `<div class="ol-card">
+      <div class="row between xs"><b>${esc(ev.awayAbbr)} @ ${esc(ev.homeAbbr)}</b><span class="muted">${when}${posted ? ' · ✅ lineups posted' : ''}</span></div>
+      <div class="xs" style="margin-top:.4rem">Jump: ${rec(t.away)} <span class="muted">vs</span> ${rec(t.home)}</div>
+      <div class="xs" style="margin-top:.3rem">Wins tip / ball first: <b class="mono ${pf >= 0.58 ? 'green' : ''}">${esc(fav)} ${pct(pf, 0)}</b> · Scores first: <b class="mono">${esc(fav)} ${pct(sf, 0)}</b></div>
+      ${split.length ? `<div class="xs" style="margin-top:.4rem;line-height:1.5">${split.join('<br>')}</div>` : ''}
+    </div>`;
+  }).join('');
+  el.innerHTML = `<details class="inset" open><summary class="b">🏀 NBA tip-off: who wins the jump, gets the ball first, and scores first</summary>
+    <div class="ol-grid" style="margin-top:.5rem">${cards}</div>
+    <div class="note">From the opening jump balls in ${TS.games} recent NBA box scores. Each team's jumper is whoever usually jumps for them (limited to tonight's official starters once posted); records (W-L) are shrunk toward 50% because samples are small. The team that wins the tip scores first ${pct(TS.rFirst, 0)} of the time in these games, which feeds the first-basket model. Bottom lines: each team's chance to score the first basket, its starters ranked 1-5 by how often they took the team's first shot in recent games (shots / games), and each one's share of the team's first-basket chance (75% that data, 25% scoring projection).</div></details>`;
+}
 function renderFirst() {
+  renderTips();
   const f = STORE.fs;
   $('fsKey').value = STORE.ol.key;
   document.querySelectorAll('#fsSports input').forEach(i => { i.checked = f.sports.includes(i.value); });
@@ -4612,10 +4723,10 @@ function renderFirst() {
   const card = r => `<div class="ol-card">
       <div class="row between xs"><span><b>${r.sport === 'NFL' ? '🏈' : '🏀'} ${esc(r.label)}</b> <span class="muted">${esc(r.mLabel)}</span></span>
         <span class="badge ${r.ev > 0.5 ? 's-questionable' : 's-verified'} mono">+${(r.ev * 100).toFixed(1)}%</span></div>
-      <div class="row between" style="margin-top:.5rem"><div><div class="b">${esc(r.player)}</div><div class="xs muted">${esc(r.team || '')}${r.lineup ? ` · <span class="${r.lineup === 'bench' ? 'amber' : r.lineup.startsWith('official') ? 'green' : ''}">${r.lineup === 'official starter' ? '✅ starting (official)' : r.lineup === 'projected starter' ? 'projected starter' : 'bench: rarely scores first'}</span>` : ''}</div></div>
+      <div class="row between" style="margin-top:.5rem"><div><div class="b">${esc(r.player)}</div><div class="xs muted">${esc(r.team || '')}${r.lineup ? ` · <span class="${r.lineup === 'bench' ? 'amber' : r.lineup.startsWith('official') ? 'green' : ''}">${r.lineup === 'official starter' ? '✅ starting (official)' : r.lineup === 'projected starter' ? 'projected starter' : 'bench: rarely scores first'}</span>` : ''}${r.rank ? ` · <span title="who takes the team's first shot, among tonight's starters">#${r.rank} first-shot taker${r.fsGames ? ` (${r.shots}/${r.fsGames} games)` : ''}</span>` : ''}</div></div>
         <div class="xl xb mono green">${fmtOdds(r.price)}</div></div>
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(toAmerican(r.pWin))} (${pct(r.pWin)}) · ${r.nBooks} books</div>
-      <div class="row between xs" style="margin-top:.4rem"><span>${r.modelP !== null ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
+      <div class="row between xs" style="margin-top:.4rem"><span>${r.modelP !== null ? `<span class="sky" title="75% data (tip-off + who takes the first shot) · 25% projection (scoring share)">Model ${pct(r.modelP)}</span>${r.pData != null ? ` <span class="muted">(data ${pct(r.pData)} · proj ${pct(r.pProj)})</span>` : ''} · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
         <button type="button" class="${tracked(r.id) ? 'on' : 'btn-soft'}" data-fstrack="${esc(r.id)}" ${tracked(r.id) ? 'disabled' : ''}>${tracked(r.id) ? '✓ Tracked' : '+ Track bet'}</button></div>
     </div>`;
   $('fsBest').innerHTML = errs + (top.length ? `<div class="xs b" style="margin-bottom:.4rem">Best first-scorer prices on the board</div><div class="ol-grid">${top.map(card).join('')}</div>`
@@ -4652,7 +4763,7 @@ function trackFirst(id) {
 function bindFirst() {
   const f = () => STORE.fs, sr = () => { save(); renderFirst(); };
   $('fsKey').addEventListener('change', e => { STORE.ol.key = e.target.value.trim(); save(); renderFirst(); renderOutliersControls(); });
-  $('fsSports').addEventListener('change', () => { f().sports = [...document.querySelectorAll('#fsSports input:checked')].map(i => i.value); sr(); });
+
   $('fsOnlyPos').addEventListener('change', e => { f().onlyPos = e.target.checked; sr(); });
   for (const [id, k] of [['fsMinEV', 'minEV'], ['fsMinBooks', 'minBooks']]) $(id).addEventListener('change', e => { const v = num(e.target.value); if (v !== null) f()[k] = v; sr(); });
   $('fsSearch').addEventListener('input', e => { f().q = e.target.value; save(); renderFirst(); });
