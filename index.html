@@ -3973,7 +3973,7 @@ for (const k of SOC_KEYS) GL_KEYS[k] = SPORTS[k].oddsKey;
 // from its free league list, so the tab works as soon as the feed carries the league.
 const BOOKS_ONLY = {
   CBA: { name: 'Chinese Basketball Association', match: /(^|_)(cba|china)|chinese/i, aps: { country: 'China', match: /^cba$|chinese basketball association/i, max: 1 } },
-  JPN: { name: 'Japan B.League', match: /japan|b_?league/i, aps: { country: 'Japan', match: /^b\.?\s?(league|1|2)\b|^b[12]\b|b\.league/i, skip: /women|w league|cup|u\d\d/i, max: 2 } } };
+  JPN: { name: 'Japan B.League', match: /japan|b_?league/i, aps: { country: 'Japan', match: /^b\.?\s?(league|premier|one|next|1|2)\b|^b[12]\b|b\.league|b\.?\s?(premier|one)/i, skip: /women|w league|cup|u\d\d/i, max: 3 } } };
 MARKET_NAMES.CBA = ['Spread', 'Total']; MARKET_NAMES.JPN = ['Spread', 'Total'];
 async function oddsSportsList() {
   const url = SERVER.proxy ? '/api/odds/sportslist' : `${ODDS_API}?${new URLSearchParams({ all: 'true', apiKey: STORE.ol.key })}`;
@@ -3997,7 +3997,10 @@ const decToAm = d => { d = +d; if (!(d > 1.0001)) return null; return d >= 2 ? M
 async function apsLeagues(sp, fresh = false) {
   const cfg = BOOKS_ONLY[sp].aps;
   const lj = await apsGet('leagues', { country: cfg.country });
-  const lgs = (lj.response || []).filter(l => cfg.match.test(l.name || '') && !(cfg.skip && cfg.skip.test(l.name || ''))).slice(0, cfg.max || 1);
+  // matching leagues, those with a season running today first (old/defunct divisions last), up to cfg.max
+  const today = new Date().toISOString().slice(0, 10), live = l => (l.seasons || []).some(x => x.start && x.end && x.start <= today && today <= x.end);
+  const lgs = (lj.response || []).filter(l => cfg.match.test(l.name || '') && !(cfg.skip && cfg.skip.test(l.name || '')))
+    .sort((a, b) => live(b) - live(a)).filter((l, i, arr) => live(l) || !arr.some(live)).slice(0, cfg.max || 1);
   if (!lgs.length) throw new Error(`API-Sports doesn't list the ${BOOKS_ONLY[sp].name} (${cfg.country} leagues it has: ${(lj.response || []).map(l => l.name).join(', ') || 'none'}).`);
   const out = { list: [], season: [], name: [], dbg: null };
   for (const lg of lgs) {
