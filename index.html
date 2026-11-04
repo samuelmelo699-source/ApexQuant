@@ -4001,7 +4001,7 @@ async function apsCBA(fresh = false) {
   const season = String((ss.find(x => x.start && x.end && x.start <= today && today <= x.end) || ss[ss.length - 1] || {}).season || '');
   const gj = await apsGet('games', { league: lg.id, season, timezone: 'UTC', ...F });
   const games = new Map((gj.response || []).map(g => [g.id, g])), now = Date.now(), list = [];
-  const dbg = { league: `${lg.name} #${lg.id}`, season, games: games.size, upcoming: [...games.values()].filter(g => Date.parse(g.date) > now).length, oddsGames: 0, matched: 0, betNames: new Set(), books: new Set() };
+  const dbg = { league: `${lg.name} #${lg.id}`, season, games: games.size, upcoming: [...games.values()].filter(g => Date.parse(g.date) > now).length, oddsGames: 0, matched: 0, past: 0, betNames: new Set(), books: new Set() };
   let page = 1, total = 1;
   do {
     const oj = await apsGet('odds', { league: lg.id, season, ...(page > 1 ? { page } : {}), ...F });
@@ -4011,7 +4011,8 @@ async function apsCBA(fresh = false) {
       for (const b of o.bookmakers || []) { dbg.books.add(b.name); for (const bet of b.bets || []) dbg.betNames.add(bet.name); }
       const g = games.get(o.game?.id); if (!g) continue;
       dbg.matched++;
-      const start = Date.parse(g.date); if (!(start > now)) continue;
+      const start = Date.parse(g.date); if (!(start > now)) { dbg.past++; continue; }
+      dbg.next = Math.min(dbg.next ?? Infinity, start);
       const H = g.teams?.home?.name, A = g.teams?.away?.name; if (!H || !A) continue;
       const bookmakers = (o.bookmakers || []).map(b => {
         const markets = [];
@@ -4032,6 +4033,7 @@ async function apsCBA(fresh = false) {
     page++;
   } while (page <= Math.min(total, 3));
   dbg.withLines = list.length;
+  dbg.nextGame = [...games.values()].map(g => Date.parse(g.date)).filter(t => t > now).sort((a, b) => a - b)[0] || null;
   return { list, season, name: lg.name, dbg: { ...dbg, betNames: [...dbg.betNames].slice(0, 8), books: [...dbg.books].slice(0, 8) } };
 }
 async function booksOnlyKey(sp) {
@@ -4294,7 +4296,7 @@ function renderGLO() {
   $('gloStatus').innerHTML = (GLO.err ? `<div class="banner bad">${esc(GLO.err)}</div>` : '') + (m
     ? `${spLabel(sport)}: ${m.n} games · lines from ${m.server ? 'the background job' : m.src ? `${m.src} (international books, decimal odds converted)` : 'the books'} at ${hhmm(m.t)}${m.server || m.src ? ' (no Odds API credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
     : `<span class="muted">Press Load to price ${spLabel(sport)} ${isSoc(sport) || BOOKS_ONLY[sport] ? 'moneylines and over/unders' : `moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals`}. ${BOOKS_ONLY[sport] ? 'Odds come from API-Sports (the current season needs a paid API-Sports plan); about 3 API-Sports requests per load, cached 30 min.' : `About ${isSoc(sport) ? 2 : 3} credits, or free if the lines were downloaded in the last 30 min.`}</span>`);
-  if (m?.dbg && !m.n) { const d = m.dbg; $('gloStatus').innerHTML += `<div class="xs muted" style="margin-top:.3rem">API-Sports check: ${esc(d.league)} season ${esc(d.season)} · ${d.games} games in the schedule, ${d.upcoming} still to play · odds posted for ${d.oddsGames} games (${d.matched} matched, ${d.withLines} with moneyline/over-under)${d.betNames.length ? ` · bet types: ${esc(d.betNames.join(', '))}` : ''}${d.books.length ? ` · books: ${esc(d.books.join(', '))}` : ''}</div>`; }
+  if (m?.dbg && !m.n) { const d = m.dbg; $('gloStatus').innerHTML += `<div class="xs muted" style="margin-top:.3rem">API-Sports check: ${esc(d.league)} season ${esc(d.season)} · ${d.games} games in the schedule, ${d.upcoming} still to play · odds posted for ${d.oddsGames} games${d.past != null ? ` (${d.past} already played, ${d.matched - d.past} upcoming, ${d.withLines} with moneyline/over-under)` : ''}${d.past === d.matched && d.matched ? ` · <b>No odds posted yet for upcoming games</b>: API-Sports usually adds them about a day before tip-off${d.nextGame ? ` (next game ${new Date(d.nextGame).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })})` : ''}. Try again later.` : ''}${d.betNames.length ? ` · bet types: ${esc(d.betNames.join(', '))}` : ''}${d.books.length ? ` · books: ${esc(d.books.join(', '))}` : ''}</div>`; }
   if (!m) { $('gloBody').innerHTML = ''; return; }
   if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline, spread or total outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
   $('gloBody').innerHTML = `<div class="ol-grid">${rows.map(r => {
