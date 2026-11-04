@@ -75,6 +75,7 @@
   .rc-loss { background: rgba(244,63,94,.15); border-color: rgba(251,113,133,.55); color: #fecdd3; }
   .rc-push, .rc-pend { background: rgba(148,163,184,.12); border-color: rgba(148,163,184,.35); color: #cbd5e1; }
   .rc-x { opacity: .8; }
+  .pa-table tr.pa-open td { background: rgba(127,127,127,.08); } .pa-detail td { white-space: normal; }
   .rc-mark { font-size: .7rem; font-weight: 700; } .rc-ok { color: var(--green); } .rc-no { color: var(--muted); }
   .rc-tally { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .rc-plist { display: grid; gap: .35rem; margin-top: .45rem; }
@@ -200,6 +201,7 @@
       <button type="button" data-view="ratings">📊 Team ratings</button>
       <button type="button" data-view="outliers">🔥 Prop outliers</button>
       <button type="button" data-view="first">🥇 First basket</button>
+      <button type="button" data-view="analyzer">📈 Prop analyzer</button>
       <button type="button" data-view="tracker">📒 Bet tracker</button>
       <button type="button" data-view="audit">🛡️ Roster audit</button>
     </nav>
@@ -449,6 +451,26 @@
   </section>
 
   <!-- ===================== FIRST SCORER ===================== -->
+  <section id="view-analyzer" class="stack hidden">
+    <div class="card stack">
+      <div class="row between" style="flex-wrap:wrap;gap:.5rem">
+        <div>
+          <h2 class="sm xb">📈 Prop analyzer · NBA</h2>
+          <p class="note" style="margin:0">Consensus line from the sportsbooks, the model's projection and cover %, this season's over/under record, and a game-by-game chart with a line slider for alt lines. Hit % uses the last 10 games, or the whole season until a player has 10.</p>
+        </div>
+        <button type="button" id="paLoadBtn" class="btn-go">Load lines</button>
+      </div>
+      <nav class="row" id="paMkts" style="flex-wrap:wrap"></nav>
+      <div class="grid g4 xs">
+        <div><label class="muted" for="paGame">Game</label><select id="paGame" style="width:100%"></select></div>
+        <div><label class="muted" for="paSort">Sort by</label><select id="paSort" style="width:100%"><option value="cover">Cover % (model)</option><option value="diff">Projection vs line</option><option value="hit">Hit % (L10 / season)</option><option value="proj">Projection</option><option value="name">Name</option></select></div>
+        <div style="grid-column:span 2"><label class="muted" for="paSearch">Search</label><input id="paSearch" type="text" placeholder="Player or team" style="width:100%"></div>
+      </div>
+      <div class="xs" id="paStatus"></div>
+      <div id="paBody"></div>
+    </div>
+  </section>
+
   <section id="view-first" class="stack hidden">
     <div class="card stack">
       <div class="row between">
@@ -2240,7 +2262,7 @@ function renderChrome() {
   document.querySelectorAll('[data-needs-props]').forEach(b => b.classList.toggle('hidden', !props));
   $('tdTabBtn').textContent = { NBA: '20+ points', NHL: 'Anytime goal',}[APP.sport] || 'Anytime TD';
   $('tickerCard').classList.toggle('hidden', ['outliers', 'first', 'recap', 'tracker', 'ratings'].includes(APP.view));
-  for (const v of ['sim', 'slate', 'recap', 'props', 'ratings', 'outliers', 'first', 'tracker', 'audit']) $(`view-${v}`).classList.toggle('hidden', v !== APP.view);
+  for (const v of ['sim', 'slate', 'recap', 'props', 'ratings', 'outliers', 'first', 'analyzer', 'tracker', 'audit']) $(`view-${v}`).classList.toggle('hidden', v !== APP.view);
   $('td30TabBtn').classList.toggle('hidden', APP.sport !== 'NBA');
   if (APP.tab === 'td30' && APP.sport !== 'NBA') APP.tab = 'summary';
   for (const t of ['summary', 'props', 'td', 'td30', 'roster']) $(`tab-${t}`).classList.toggle('hidden', t !== APP.tab);
@@ -4679,6 +4701,152 @@ async function scanFirst(force = false) {
   computeFirst();
   renderFirst();
 }
+/* =====================================================================
+   PROP ANALYZER (NBA): consensus line, projection, cover %, season record and a game-by-game chart with a
+   line slider (alt lines) → hit % over the last 10 games (or the season so far while there are fewer than 10).
+   Everything except the consensus line comes from the model and ESPN game logs.
+   ===================================================================== */
+const PA_MARKETS = [['nba_pts', 'Points', 'PTS'], ['nba_reb', 'Rebounds', 'REB'], ['nba_ast', 'Assists', 'AST'], ['nba_3pm', '3-Pointers', '3PM'], ['nba_pra', 'Pts+Reb+Ast', 'PRA']];
+STORE.pa = { mkt: 'nba_pts', game: '', q: '', sort: 'cover', ...(STORE.pa || {}) };
+const PA = { open: null, slide: {}, busy: false, msg: '', loaded: false };
+const paShort = n => String(n || '').split(' ').filter(w => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(w)).slice(-1)[0] || n;
+function paRows() {
+  const out = [], q = normName(STORE.pa.q || '');
+  for (const sim of APP.simCache.values()) {
+    if (sim.ev.sport !== 'NBA' || sim.ev.state !== 'pre' || !sim.players) continue;
+    if (STORE.pa.game && sim.ev.eventId !== STORE.pa.game) continue;
+    for (const r of sim.players) {
+      if (r.market !== STORE.pa.mkt || !(r.mean > 0)) continue;
+      if (q && !normName(r.name).includes(q) && !normName(r.team).includes(q)) continue;
+      const bk = STORE.propBook[r.id], line = bk?.line ?? null;
+      const logs = logAll('NBA', r.playerId, r.market) || [];          // this season, most recent first
+      const win = logs.length >= 10 ? logs.slice(0, 10) : logs;       // L10, or the season so far
+      const pr = line !== null ? probAtLine(r, line) : null, pO = pr ? pr.over / Math.max(1e-9, pr.over + pr.under) : null;
+      const rec = line === null ? null : logs.reduce((a, g) => (g.v > line ? a.o++ : g.v < line ? a.u++ : a.p++, a), { o: 0, u: 0, p: 0 });
+      const graded = line === null ? [] : win.filter(g => g.v !== line);
+      const books = bk?.over && bk?.under ? devig(bk.over, bk.under) : null;
+      out.push({ r, sim, line, bk, books, proj: r.mean, team: r.team, opp: r.team === sim.ev.homeAbbr ? sim.ev.awayAbbr : sim.ev.homeAbbr, home: r.team === sim.ev.homeAbbr,
+        logs, win, rec, hit: graded.length ? graded.filter(g => g.v > line).length / graded.length : null, pO, side: pO === null ? null : pO >= 0.5 ? 'O' : 'U',
+        cover: pO === null ? null : Math.max(pO, 1 - pO), diff: line === null ? null : r.mean - line });
+    }
+  }
+  const k = STORE.pa.sort, val = x => k === 'proj' ? x.proj : k === 'diff' ? (x.diff === null ? null : Math.abs(x.diff)) : k === 'hit' ? (x.hit === null ? null : Math.max(x.hit, 1 - x.hit)) : k === 'name' ? null : x.cover;
+  return k === 'name' ? out.sort((a, b) => a.r.name.localeCompare(b.r.name)) : out.sort((a, b) => (val(b) ?? -1) - (val(a) ?? -1) || b.proj - a.proj);
+}
+// bar chart of every game this season (oldest → newest), coloured against the slider line
+function paChart(x, L) {
+  const games = [...x.logs].reverse(), n = games.length;
+  if (!n) return '<div class="xs muted">No games played this season yet.</div>';
+  const W = Math.max(n * 26 + 40, Math.min(Math.max(300, (PA.cw || 600) - 30), 1100)), H = 190, top = 18, base = 150, maxV = Math.max(...games.map(g => g.v), L, x.proj) * 1.12 || 1;
+  const y = v => base - (v / maxV) * (base - top), bw = Math.min(34, (W - 40) / n - 6);
+  const lastTen = new Set(games.slice(-10).map((g, i) => n - Math.min(10, n) + i));
+  const bars = games.map((g, i) => {
+    const cx = 30 + i * ((W - 40) / n) + ((W - 40) / n) / 2, col = g.v > L ? 'var(--green)' : g.v < L ? 'var(--rose)' : 'var(--muted)';
+    return `<g><rect x="${(cx - bw / 2).toFixed(1)}" y="${y(g.v).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, base - y(g.v)).toFixed(1)}" rx="3" fill="${col}" opacity="${lastTen.has(i) ? 0.95 : 0.45}"/>
+      <text x="${cx.toFixed(1)}" y="${(y(g.v) - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="currentColor">${fmtN(g.v)}</text>
+      <text x="${cx.toFixed(1)}" y="${base + 13}" text-anchor="middle" font-size="9" fill="var(--muted)">${g.home ? '' : '@'}${esc(String(g.opp || '').slice(0, 4))}</text>
+      <text x="${cx.toFixed(1)}" y="${base + 25}" text-anchor="middle" font-size="8" fill="var(--muted)">${esc(String(g.date || '').slice(5, 10).replace('-', '/'))}</text></g>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;color:var(--text, currentColor)" role="img" aria-label="Game log vs line">
+    <line x1="24" x2="${W - 6}" y1="${base}" y2="${base}" stroke="var(--muted)" stroke-width="0.5"/>
+    ${bars}
+    <line x1="24" x2="${W - 6}" y1="${y(L).toFixed(1)}" y2="${y(L).toFixed(1)}" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="4" y="${(y(L) + 3).toFixed(1)}" font-size="10" fill="var(--amber)">${fmtN(L)}</text>
+    <line x1="24" x2="${W - 6}" y1="${y(x.proj).toFixed(1)}" y2="${y(x.proj).toFixed(1)}" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2 3" opacity="0.8"/>
+  </svg>`;
+}
+function paDetail(x) {
+  const id = x.r.id, step = 0.5, vals = x.logs.map(g => g.v);
+  const lo = Math.max(0, Math.floor(Math.min(x.proj, ...(vals.length ? vals : [x.proj])) - 4)), hi = Math.ceil(Math.max(x.proj, x.line ?? 0, ...(vals.length ? vals : [x.proj])) + 4);
+  const L = PA.slide[id] ?? (x.line ?? Math.round(x.proj * 2) / 2 - (Number.isInteger(Math.round(x.proj * 2) / 2) ? 0.5 : 0));
+  const pr = probAtLine(x.r, L), pO = pr.over / Math.max(1e-9, pr.over + pr.under);
+  const stat = arr => { const g = arr.filter(v => v.v !== L), o = g.filter(v => v.v > L).length; return g.length ? `${o}/${g.length} <span class="muted">(${pct(o / g.length, 0)})</span>` : '—'; };
+  const last10 = x.logs.slice(0, 10), lab = x.logs.length >= 10 ? 'Last 10' : `Season (${x.logs.length} games)`;
+  const avg = arr => arr.length ? fmtN(arr.reduce((a, g) => a + g.v, 0) / arr.length) : '—';
+  return `<div class="stack" style="gap:.5rem">
+    <div class="row between xs" style="flex-wrap:wrap;gap:.5rem">
+      <span><b>${esc(x.r.name)}</b> <span class="muted">${esc(x.team)} ${x.home ? 'vs' : '@'} ${esc(x.opp)} · ${esc(PA_MARKETS.find(m => m[0] === STORE.pa.mkt)?.[1] || '')}</span></span>
+      <span class="muted">Projection <b class="sky">${fmtN(x.proj)}</b>${x.line !== null ? ` · consensus <b>${fmtN(x.line)}</b>` : ''} · avg ${lab.toLowerCase().startsWith('last') ? 'L10' : 'season'} ${avg(x.win)}</span>
+    </div>
+    <div class="table-wrap pa-chart" style="padding-bottom:.2rem">${paChart(x, L)}</div>
+    <div class="row xs" style="gap:.6rem;align-items:center;flex-wrap:wrap">
+      <label for="paSlide" class="muted">Line</label>
+      <input id="paSlide" data-paslide="${esc(id)}" type="range" min="${lo + 0.5}" max="${hi - 0.5}" step="${step}" value="${L}" style="flex:1;min-width:180px">
+      <b class="mono amber pa-lval" style="min-width:3.5rem">${fmtN(L)}</b>
+      ${x.line !== null ? `<button type="button" class="xs" data-pareset="${esc(id)}">Reset to ${fmtN(x.line)}</button>` : ''}
+    </div>
+    <div class="grid g4 xs pa-stats">
+      <div class="inset"><div class="muted">Over hit · ${lab}</div><div class="b">${stat(x.win)}</div></div>
+      <div class="inset"><div class="muted">Over hit · season</div><div class="b">${stat(x.logs)}</div></div>
+      <div class="inset"><div class="muted">Over hit · last 5</div><div class="b">${stat(x.logs.slice(0, 5))}</div></div>
+      <div class="inset"><div class="muted">Model at ${fmtN(L)}</div><div class="b"><span class="${pO >= 0.5 ? 'green' : 'rose'}">O ${pct(pO, 0)}</span> / U ${pct(1 - pO, 0)} <span class="muted mono">${fmtOdds(toAmerican(Math.max(pO, 1 - pO)))}</span></div></div>
+    </div>
+    <div class="xs muted">Bars: each game this season (bright = the last 10), green above the line, red below, grey = exactly on it. Amber dashes = the slider line, blue dots = tonight's projection. Slide to check alt lines.</div>
+  </div>`;
+}
+function renderAnalyzer() {
+  const el = $('paBody'); if (!el) return;
+  $('paMkts').innerHTML = PA_MARKETS.map(([k, , s]) => `<button type="button" data-pamkt="${k}" class="${STORE.pa.mkt === k ? 'on' : ''}">${s}</button>`).join('');
+  const games = [...APP.simCache.values()].filter(s => s.ev.sport === 'NBA' && s.ev.state === 'pre').map(s => s.ev).sort((a, b) => new Date(a.start) - new Date(b.start));
+  $('paGame').innerHTML = `<option value="">All games (${games.length})</option>` + games.map(e => `<option value="${e.eventId}" ${STORE.pa.game === e.eventId ? 'selected' : ''}>${esc(e.awayAbbr)} @ ${esc(e.homeAbbr)} · ${new Date(e.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</option>`).join('');
+  $('paSort').value = STORE.pa.sort; $('paSearch').value = STORE.pa.q || '';
+  if (APP.sport !== 'NBA' || !games.length) { el.innerHTML = `<div class="inset xs muted">${PA.busy ? esc(PA.msg) : 'Loading NBA games…'}</div>`; return; }
+  const rows = paRows(), withLine = rows.filter(x => x.line !== null).length;
+  const triedLines = Boolean(AF.at?.NBA);
+  $('paStatus').innerHTML = `${rows.length} players · ${withLine} with a sportsbook line${withLine < rows.length ? ` · <span class="muted">${triedLines ? `${rows.length - withLine} have no line posted by the books (yet)` : `press <b>Load lines</b> for the books' consensus lines (about 1 credit per market per game; cached ${STORE.ol.ttl} min)`}</span>` : ''}${PA.msg ? ` · ${esc(PA.msg)}` : ''}`;
+  if (!rows.length) { el.innerHTML = '<div class="inset xs muted">No players match.</div>'; return; }
+  const openX = rows.find(x => x.r.id === PA.open);
+  PA.cw = el.clientWidth || 600;   // chart drawn at the real width, so text stays the same size on phone and desktop
+  el.innerHTML = (openX ? `<div class="inset pa-detail-box" style="margin-bottom:.6rem">${paDetail(openX)}<div style="text-align:right;margin-top:.3rem"><button type="button" class="xs" data-paclose>Close ✕</button></div></div>` : '') + `<div class="table-wrap"><table class="pa-table"><thead><tr><th>Player</th><th>Matchup</th><th>Line</th><th>Proj</th><th>Diff</th><th>Cover</th><th>Season O-U</th><th>Hit ${'L10'}</th><th>Books O%</th></tr></thead><tbody>${rows.map(x => {
+    const open = PA.open === x.r.id, n = x.win.length;
+    return `<tr data-paopen="${esc(x.r.id)}" style="cursor:pointer" class="${open ? 'pa-open' : ''}">
+      <td><b>${esc(x.r.name)}</b> <span class="xs muted">${open ? '▴' : '▾'}</span></td>
+      <td class="xs">${esc(x.team)} ${x.home ? 'vs' : '@'} ${esc(x.opp)}</td>
+      <td class="mono">${x.line === null ? '<span class="muted">—</span>' : `${fmtN(x.line)}${x.bk?.nBooks ? ` <span class="xs muted">${x.bk.nBooks}bk</span>` : ''}`}</td>
+      <td class="mono sky b">${fmtN(x.proj)}</td>
+      <td class="mono ${x.diff === null ? '' : x.diff > 0 ? 'green' : 'rose'}">${x.diff === null ? '—' : `${x.diff > 0 ? '+' : ''}${fmtN(x.diff)}`}</td>
+      <td class="mono b">${x.cover === null ? '—' : `<span class="${x.side === 'O' ? 'green' : 'rose'}">${x.side === 'O' ? 'Over' : 'Under'}</span> ${pct(Math.min(x.cover, 0.99), 0)}`}</td>
+      <td class="mono">${x.rec ? `${x.rec.o}-${x.rec.u}${x.rec.p ? `-${x.rec.p}` : ''}` : '—'}</td>
+      <td class="mono">${x.hit === null ? '—' : `${pct(x.hit, 0)} <span class="xs muted">${n < 10 ? `${n}g` : ''}</span>`}</td>
+      <td class="mono">${x.books === null ? '—' : pct(x.books, 0)}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+async function openAnalyzer(loadLines = false) {
+  if (PA.busy) return;
+  PA.busy = true; PA.msg = 'Loading NBA games, rosters and game logs…'; renderAnalyzer();
+  try {
+    if (APP.sport !== 'NBA') { APP.sport = 'NBA'; APP.eventId = null; APP.simCache.clear(); renderChrome(); await syncSport(false, true); }
+    await preloadSlate(); refreshAllSims();
+    if (loadLines) { PA.msg = 'Loading sportsbook lines…'; renderAnalyzer(); await autoFillLines('NBA', false); refreshAllSims(); }
+    PA.msg = '';
+  } catch (e) { PA.msg = e.message; }
+  PA.busy = false; PA.loaded = true; renderAnalyzer();
+}
+function bindAnalyzer() {
+  $('paMkts').addEventListener('click', e => { const b = e.target.closest('[data-pamkt]'); if (!b) return; STORE.pa.mkt = b.dataset.pamkt; PA.open = null; save(); renderAnalyzer(); });
+  $('paGame').addEventListener('change', e => { STORE.pa.game = e.target.value; save(); renderAnalyzer(); });
+  $('paSort').addEventListener('change', e => { STORE.pa.sort = e.target.value; save(); renderAnalyzer(); });
+  $('paSearch').addEventListener('input', e => { STORE.pa.q = e.target.value; save(); renderAnalyzer(); });
+  $('paLoadBtn').addEventListener('click', () => { if (!hasOdds()) { PA.msg = 'Add your Odds API key (Prop outliers) first.'; renderAnalyzer(); return; } openAnalyzer(true); });
+  $('paBody').addEventListener('click', e => {
+    const r = e.target.closest('[data-pareset]'); if (r) { delete PA.slide[r.dataset.pareset]; renderAnalyzer(); return; }
+    if (e.target.closest('[data-paclose]')) { PA.open = null; renderAnalyzer(); return; }
+    if (e.target.closest('.pa-detail-box')) return;
+    const t = e.target.closest('[data-paopen]'); if (!t) return;
+    PA.open = PA.open === t.dataset.paopen ? null : t.dataset.paopen; renderAnalyzer();
+    if (PA.open) $('paBody').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+  $('paBody').addEventListener('input', e => {
+    const s = e.target.closest('[data-paslide]'); if (!s) return;
+    PA.slide[s.dataset.paslide] = +s.value;
+    const x = paRows().find(y => y.r.id === s.dataset.paslide); if (!x) return;
+    // refresh the chart and numbers only (the slider itself stays, so dragging isn't interrupted)
+    const tmp = document.createElement('div'); tmp.innerHTML = paDetail(x);
+    const box = s.closest('.pa-detail-box');
+    for (const sel of ['.pa-chart', '.pa-stats', '.pa-lval']) { const a = box.querySelector(sel), b = tmp.querySelector(sel); if (a && b) a.innerHTML = b.innerHTML; }
+  });
+}
+
 // NBA tip-off table: likely jumpers, their records, who wins the tip / gets the ball first, who scores first
 function renderTips() {
   const el = $('fsTips'); if (!el) return;
@@ -5551,6 +5719,7 @@ function bind() {
     if (APP.view === 'audit') renderAudit();
     if (APP.view === 'outliers') renderOutliers();
     if (APP.view === 'first') renderFirst();
+    if (APP.view === 'analyzer') { renderAnalyzer(); openAnalyzer(false); }
     if (APP.view === 'recap') { renderRecap(); gradeAll(false).then(renderRecap); }
     if (APP.view === 'tracker') { updateGameCloses(); renderTracker(); renderReport(); gradeAll(false); }
     if (APP.view === 'ratings') openRatings();
@@ -5682,6 +5851,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bind();
   bindOutliers();
   bindGLO();
+  bindAnalyzer();
   bindRatings();
   renderChrome();
   syncSport();

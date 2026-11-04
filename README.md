@@ -34,6 +34,10 @@ Deploy: drag this folder (or the zip) into https://app.netlify.com/drop.
 
 Every Division I game is included (ESPN `groups=50`). Team ratings start from last season's standings and update from this season's final scores. Opponents outside Division I are pooled into one team. The sim covers moneyline, spread and total. NCAAB player props show up on the Prop outliers tab, priced against the other books only, since there's no college player model. To save credits, the props scan covers the next 24 hours, and games without props cost nothing.
 
+## Prop analyzer (NBA)
+
+The 📈 Prop analyzer page has tabs for Points, Rebounds, Assists, 3-pointers and PRA. For each player it shows the books' consensus line, the model's projection, the gap between them, the model's cover % (over or under), this season's over-under record at that line, the hit % over the last 10 games (or the season so far until a player has 10), and the books' no-vig over %. Tap a player for a chart of every game this season with a line slider for alt lines; hit % for the last 10, last 5 and season, and the model's over/under %, update as you slide. **Load lines** fetches the sportsbook lines (about 1 credit per market per game, cached).
+
 ## Soccer
 
 The ⚽ Soccer button has a league dropdown covering the Premier League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, Champions League, Europa League, Conference League, Championship, Eredivisie, Primeira Liga, Liga MX, Scottish Premiership and Brasileirão.
