@@ -407,6 +407,8 @@
         <button type="button" data-glotab="CBB">🎓 NCAAB</button>
         <button type="button" data-glotab="CBA">🇨🇳 CBA</button>
         <button type="button" data-glotab="JPN">🇯🇵 Japan</button>
+        <button type="button" data-glotab="KBL">🇰🇷 KBL</button>
+        <button type="button" data-glotab="NBL">🇦🇺 NBL</button>
         <button type="button" data-glotab="SOC">⚽ Soccer</button>
         <select id="gloSocLeague" aria-label="Soccer league" class="hidden"></select>
       </nav>
@@ -579,8 +581,8 @@ for (const k of SOC_KEYS) { MARKET_NAMES[k] = ['Spread', 'Total goals']; UNIT[k]
 // ESPN only returns every Division I / FBS game with a group filter
 const ESPN_GROUPS = { CFB: '&groups=80', CBB: '&groups=50' };
 const grp = sp => ESPN_GROUPS[sp] || '';
-const spLabel = sp => ({ CBB: 'NCAAB', CBA: 'CBA', JPN: 'B.League' })[sp] || SPORTS[sp]?.name || sp;
-const spIcon = sp => ({ NFL: '🏈', CFB: '🏈', NBA: '🏀', CBB: '🎓', NHL: '🏒', CBA: '🇨🇳', JPN: '🇯🇵' })[sp] || (isSoc(sp) ? '⚽' : '');
+const spLabel = sp => ({ CBB: 'NCAAB', CBA: 'CBA', JPN: 'B.League', KBL: 'KBL', NBL: 'NBL' })[sp] || SPORTS[sp]?.name || sp;
+const spIcon = sp => ({ NFL: '🏈', CFB: '🏈', NBA: '🏀', CBB: '🎓', NHL: '🏒', CBA: '🇨🇳', JPN: '🇯🇵', KBL: '🇰🇷', NBL: '🇦🇺' })[sp] || (isSoc(sp) ? '⚽' : '');
 const urlFor = (key, path) => `${ESPN}${SPORTS[key].sport}/${SPORTS[key].league}/${path}`;
 
 const RATING_LABELS = {
@@ -3973,8 +3975,10 @@ for (const k of SOC_KEYS) GL_KEYS[k] = SPORTS[k].oddsKey;
 // from its free league list, so the tab works as soon as the feed carries the league.
 const BOOKS_ONLY = {
   CBA: { name: 'Chinese Basketball Association', match: /(^|_)(cba|china)|chinese/i, aps: { country: 'China', match: /^cba$|chinese basketball association/i, max: 1 } },
+  KBL: { name: 'Korean Basketball League (KBL)', apsOnly: true, aps: { search: 'KBL', country: 'South Korea', match: /^kbl$/i, max: 1 } },
+  NBL: { name: 'Australian NBL', apsOnly: true, aps: { search: 'NBL', country: 'Australia', match: /^nbl$/i, max: 1 } },
   JPN: { name: 'Japan B.League', match: /japan|b_?league/i, aps: { country: 'Japan', match: /^b\.?\s?(league|premier|one|next|1|2)\b|^b[12]\b|b\.league|b\.?\s?(premier|one)/i, skip: /women|w league|cup|u\d\d/i, max: 3 } } };
-MARKET_NAMES.CBA = ['Spread', 'Total']; MARKET_NAMES.JPN = ['Spread', 'Total'];
+for (const k of ['CBA', 'JPN', 'KBL', 'NBL']) MARKET_NAMES[k] = ['Spread', 'Total'];
 async function oddsSportsList() {
   const url = SERVER.proxy ? '/api/odds/sportslist' : `${ODDS_API}?${new URLSearchParams({ all: 'true', apiKey: STORE.ol.key })}`;
   const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(`league list HTTP ${r.status}`);
@@ -3996,7 +4000,9 @@ async function apsGet(path, params) {
 const decToAm = d => { d = +d; if (!(d > 1.0001)) return null; return d >= 2 ? Math.round((d - 1) * 100) : Math.round(-100 / (d - 1)); };
 async function apsLeagues(sp, fresh = false) {
   const cfg = BOOKS_ONLY[sp].aps;
-  const lj = await apsGet('leagues', { country: cfg.country });
+  // KBL/NBL: API-Sports' country filter misses some countries, so look up by name and check the country
+  const lj = cfg.search ? await apsGet('leagues', { search: cfg.search }) : await apsGet('leagues', { country: cfg.country });
+  if (cfg.search) lj.response = (lj.response || []).filter(l => (l.country?.name || '').toLowerCase() === cfg.country.toLowerCase());
   // matching leagues, those with a season running today first (old/defunct divisions last), up to cfg.max
   const today = new Date().toISOString().slice(0, 10), live = l => (l.seasons || []).some(x => x.start && x.end && x.start <= today && today <= x.end);
   const lgs = (lj.response || []).filter(l => cfg.match.test(l.name || '') && !(cfg.skip && cfg.skip.test(l.name || '')))
@@ -4280,8 +4286,9 @@ async function gloScan(force = false) {
   try {
     let c = null;
     if (BOOKS_ONLY[sport]) {
-      const k = hasOdds() ? await booksOnlyKey(sport).catch(() => ({ key: null, bball: [] })) : { key: null, bball: [] };
+      const k = hasOdds() && !BOOKS_ONLY[sport].apsOnly ? await booksOnlyKey(sport).catch(() => ({ key: null, bball: [] })) : { key: null, bball: [] };
       if (!k.key) {
+        if (!SERVER.aps && BOOKS_ONLY[sport].apsOnly) throw new Error(`${BOOKS_ONLY[sport].name} odds come from API-Sports: add APISPORTS_KEY in Netlify (and use the GitHub deploy).`);
         if (!SERVER.aps) throw new Error(`The Odds API doesn't carry the ${BOOKS_ONLY[sport].name}${k.bball?.length ? ` (its basketball leagues: ${k.bball.join(', ')})` : ''}. ${SERVER.on ? 'Add APISPORTS_KEY in Netlify (then redeploy) to use API-Sports for these odds.' : 'These odds come from API-Sports through the background server, which needs the GitHub deploy.'}`);
         const cc = GL.data[sport];
         if (!force && cc?.src === 'API-Sports' && Date.now() - cc.t < 30 * 60e3) c = cc;
