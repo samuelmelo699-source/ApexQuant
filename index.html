@@ -4491,13 +4491,24 @@ function fsModelIndex() {
       const Lam = Math.max(Lam0, lam.reduce((a, x) => a + x.l, 0) / 0.93);
       for (const { r, l } of lam) idx.set(`NFL|${r.eventId}|${r.name}`, { p: l / Lam * (1 - Math.exp(-Lam)), team: r.team, name: r.name, sim });
     } else if (sp === 'NBA') {
+      // First basket = one of the 10 starters almost every game. Starting fives: ESPN's official lineup once posted
+      // (~30 min before tip), otherwise the projected five from the depth chart. Starters share ~94% of their team's
+      // chance (weighted by projected scoring), the bench splits the rest.
       const pts = rows.filter(r => r.market === 'nba_pts');
+      const official = REG.pregame[`NBA:${sim.ev.eventId}`]?.starters || {};
       for (const side of ['away', 'home']) {
-        const abbr = side === 'away' ? sim.ev.awayAbbr : sim.ev.homeAbbr;
+        const abbr = side === 'away' ? sim.ev.awayAbbr : sim.ev.homeAbbr, teamId = side === 'away' ? sim.ev.awayTeamId : sim.ev.homeTeamId;
         const pTeam = 0.5 + 0.25 * ((side === 'home' ? sim.pHome : sim.pAway) - 0.5);
-        const mine = pts.filter(r => r.team === abbr).map(r => ({ r, w: Math.pow(r.mean, 1.15) * (r.slot === '6TH' ? 0.15 : 1) }));
-        const W = mine.reduce((a, x) => a + x.w, 0);
-        for (const { r, w } of mine) idx.set(`NBA|${r.eventId}|${r.name}`, { p: pTeam * 0.97 * w / W, team: r.team, name: r.name, sim });
+        const conf = official[String(teamId)];
+        let five = new Set((conf || []).map(String));
+        if (!five.size) try { five = new Set(buildSlots('NBA', teamId, sim.ev).filter(x => x.player && x.slot !== '6TH').map(x => String(x.player.playerId))); } catch {}
+        const mine = pts.filter(r => r.team === abbr).map(r => ({ r, start: five.has(String(r.playerId)), w: Math.pow(Math.max(r.mean, 0.5), 1.15) }));
+        const st = mine.filter(x => x.start), bn = mine.filter(x => !x.start);
+        const Ws = st.reduce((a, x) => a + x.w, 0), Wb = bn.reduce((a, x) => a + x.w, 0), share = st.length ? (bn.length ? 0.94 : 1) : 0;
+        for (const x of mine) {
+          const p = st.length ? (x.start ? share * x.w / Ws : (1 - share) * x.w / Wb) : x.w / (Ws + Wb);
+          idx.set(`NBA|${x.r.eventId}|${x.r.name}`, { p: pTeam * 0.97 * p, team: x.r.team, name: x.r.name, sim, lineup: x.start ? (conf ? 'official starter' : 'projected starter') : (st.length ? 'bench' : null) });
+        }
       }
     }
   }
@@ -4530,7 +4541,7 @@ function computeFirst() {
       rows.push({ id: `fs|${ev.id}|${k}`, sport, sportKey: OL_SPORTS[sport].key, market: FS_MKT[sport].key, mLabel: FS_MKT[sport].label, home: ev.home_team, away: ev.away_team,
         eventId: ev.id, label, start: ev.commence_time, player: g.player, team: m?.team || teamOf[sport](g.player) || '',
         price: bestQ.price, book: bestQ.title, bookKey: bestQ.book, pWin: fair.p, pLose: 1 - fair.p, nBooks: g.quotes.length,
-        ev: ev$, stake: ev$ > 0 ? kellyStake(fair.p, 1 - fair.p, bestQ.price) : 0, modelP: m ? m.p : null,
+        ev: ev$, stake: ev$ > 0 ? kellyStake(fair.p, 1 - fair.p, bestQ.price) : 0, modelP: m ? m.p : null, lineup: m?.lineup || null,
         prices: [...g.quotes].sort((a, b) => payout(b.price) - payout(a.price)), t, holds: players.holds });
     }
   }
@@ -4573,6 +4584,12 @@ async function scanFirst(force = false) {
     FS.events = events.length;
   } catch (e) { FS.errors.push(e.message); }
   finally { FS.busy = false; $('fsScanBtn').disabled = false; }
+  // NBA: official starting fives are posted ~30 min before tip; re-check games starting within 2 hours
+  if (APP.sport === 'NBA' && STORE.fs.sports.includes('NBA')) {
+    $('fsStatus').textContent = 'Checking official NBA starting lineups…';
+    const soon = eventsForSport().filter(ev => ev.state === 'pre' && new Date(ev.start).getTime() - Date.now() < 2 * 3600e3);
+    try { if (soon.length && await ensurePregame(soon, true)) APP.simCache.clear(); } catch {}
+  }
   computeFirst();
   renderFirst();
 }
@@ -4595,7 +4612,7 @@ function renderFirst() {
   const card = r => `<div class="ol-card">
       <div class="row between xs"><span><b>${r.sport === 'NFL' ? '🏈' : '🏀'} ${esc(r.label)}</b> <span class="muted">${esc(r.mLabel)}</span></span>
         <span class="badge ${r.ev > 0.5 ? 's-questionable' : 's-verified'} mono">+${(r.ev * 100).toFixed(1)}%</span></div>
-      <div class="row between" style="margin-top:.5rem"><div><div class="b">${esc(r.player)}</div><div class="xs muted">${esc(r.team || '')}</div></div>
+      <div class="row between" style="margin-top:.5rem"><div><div class="b">${esc(r.player)}</div><div class="xs muted">${esc(r.team || '')}${r.lineup ? ` · <span class="${r.lineup === 'bench' ? 'amber' : r.lineup.startsWith('official') ? 'green' : ''}">${r.lineup === 'official starter' ? '✅ starting (official)' : r.lineup === 'projected starter' ? 'projected starter' : 'bench: rarely scores first'}</span>` : ''}</div></div>
         <div class="xl xb mono green">${fmtOdds(r.price)}</div></div>
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(toAmerican(r.pWin))} (${pct(r.pWin)}) · ${r.nBooks} books</div>
       <div class="row between xs" style="margin-top:.4rem"><span>${r.modelP !== null ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
