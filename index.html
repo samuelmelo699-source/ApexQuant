@@ -3845,10 +3845,15 @@ function renderOutliersControls() {
 const tracked = id => STORE.bets.some(b => b.src === id);
 // last-10 hit rate of this exact bet (side + line) from the player's ESPN game log
 function olHit(r) {
-  if (!r.pid || !r.mm) return null;
-  const all = logAll(r.sport, r.pid, r.mm); if (!all?.length) return null;
+  if (!r.mm) return null;
+  // player id: the model's match, else the ESPN roster (only uses a game log that's already loaded)
+  let pid = r.pid;
+  if (!pid) { const P = fsResolver([...REG.players.values()].filter(p => p.sport === r.sport).map(p => ({ name: p.playerName, value: p })))(r.player); pid = P?.playerId; }
+  if (!pid) return null;
+  const all = logAll(r.sport, pid, r.mm); if (!all?.length) return null;
   const xs = all.slice(0, 10).map(g => g.v);
-  const win = v => r.side === 'Yes' ? v > 0 : r.side === 'O' ? v > r.line : v < r.line;
+  // yes/no props: double-double = 2nd-best of PTS/REB/AST is 10+; anytime TD etc. = the stat is 1+
+  const win = v => r.side === 'Yes' ? (r.mm === 'nba_dd' ? v >= 10 : v > 0) : r.side === 'O' ? v > r.line : v < r.line;
   const graded = xs.filter(v => r.side === 'Yes' || v !== r.line);      // whole-number lines: pushes don't count
   return graded.length ? { hits: graded.filter(win).length, n: graded.length, rate: graded.filter(win).length / graded.length } : null;
 }
@@ -3889,7 +3894,7 @@ function renderOutliers() {
         <div><div class="b">${esc(r.player)}</div><div class="xs muted">${r.side === 'Yes' ? '' : r.side + ' ' + r.line + ' '}${esc(r.mLabel)}${r.alt ? ' · alt' : ''}</div></div>
         <div class="xl xb mono green">${fmtOdds(r.price)}</div>
       </div>
-      ${(h => h ? `<div class="xs" style="margin-top:.4rem">🎯 Hit <b class="mono ${h.rate >= 0.6 ? 'green' : h.rate <= 0.4 ? 'rose' : ''}">${h.hits}/${h.n} (${Math.round(h.rate * 100)}%)</b> <span class="muted">last ${h.n} games at this line</span></div>` : '')(olHit(r))}
+      ${(h => h ? `<div class="xs" style="margin-top:.4rem">🎯 Hit <b class="mono ${h.rate >= 0.6 ? 'green' : h.rate <= 0.4 ? 'rose' : ''}">${h.hits}/${h.n} (${Math.round(h.rate * 100)}%)</b> <span class="muted">${r.mm === 'nba_dd' ? `double-doubles in his last ${h.n} games` : r.side === 'Yes' ? `last ${h.n} games` : `last ${h.n} games at this line`}</span></div>` : '')(olHit(r))}
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(r.fairOdds)} (${pct(r.pWin)}) · ${r.nBooks} books${age}</div>
       <div class="row between xs" style="margin-top:.4rem">
         <span>${r.modelP !== null ? `<span class="sky">Model ${pct(r.modelP)}</span> · ` : ''}Stake <b class="mono">$${r.stake}</b></span>
