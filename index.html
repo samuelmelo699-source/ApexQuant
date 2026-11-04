@@ -2931,9 +2931,11 @@ function onWhyClick(e) {
 function propTable(rows, withGame) {
   if (!rows.length) return '<div class="inset xs muted">No rows match.</div>';
   return `<div class="table-wrap"><table>
-    <thead><tr>${withGame ? '<th>Game</th>' : ''}<th>Player</th><th>Role</th><th>Market</th><th>Proj</th><th>Fair line</th><th>Book line</th><th>Over</th><th>Under</th><th>Over %</th><th>Under %</th><th>Best EV</th></tr></thead>
+    <thead><tr>${withGame ? '<th>Game</th>' : ''}<th>Player</th><th>Role</th><th>Market</th><th>Proj</th><th>Fair line</th><th>Book line</th><th>Over</th><th>Under</th><th>Over %</th><th>Under %</th><th title="Model: the odds that match the model's chances (pushes excluded). Books: the sportsbooks' price with the margin removed.">Fair odds</th><th>Best EV</th></tr></thead>
     <tbody>${rows.map(r => {
       const x = propEval(r);
+      const dM = Math.max(1e-9, x.p.over + x.p.under), mO = x.p.over / dM;
+      const bF = x.bk?.over && x.bk?.under ? devig(x.bk.over, x.bk.under) : null;
       return `<tr>
         ${withGame ? `<td class="mono">${esc(r.game)}</td>` : ''}
         <td><b>${esc(r.name)}</b> <span class="muted mono">${esc(r.team)}</span>${r.status !== 'verified' ? ` <span class="badge s-${r.status}">${r.status[0].toUpperCase()}</span>` : ''}<div style="margin-top:.25rem">${whyBtn(r.id)}</div></td>
@@ -2944,8 +2946,10 @@ function propTable(rows, withGame) {
         <td><input type="number" step="5" class="mono" data-pb="${esc(r.id)}" data-f="over" value="${x.bk?.over ?? ''}" placeholder="−110">${x.bk?.overBook ? `<div class="xs muted">${esc(x.bk.overBook)}</div>` : ''}</td>
         <td><input type="number" step="5" class="mono" data-pb="${esc(r.id)}" data-f="under" value="${x.bk?.under ?? ''}" placeholder="−110">${x.bk?.underBook ? `<div class="xs muted">${esc(x.bk.underBook)}</div>` : ''}</td>
         <td class="mono">${pct(x.p.over)}</td><td class="mono">${pct(x.p.under)}</td>
+        <td class="mono xs" style="white-space:nowrap"><div><span class="muted">Model</span> O <b>${fmtOdds(toAmerican(mO))}</b> · U <b>${fmtOdds(toAmerican(1 - mO))}</b></div>
+          <div><span class="muted">Books</span> ${bF === null ? '<span class="muted">—</span>' : `O ${fmtOdds(toAmerican(bF))} · U ${fmtOdds(toAmerican(1 - bF))}`}</div></td>
         <td class="mono ${x.best?.ev > 0 ? 'pos' : x.best ? 'neg' : 'muted'}">${x.best ? `${x.best.side} $${x.best.ev.toFixed(3)}` : '—'}</td>
-</tr>${whyRow(r.id, withGame ? 12 : 11)}`;
+</tr>${whyRow(r.id, withGame ? 13 : 12)}`;
     }).join('')}</tbody></table></div>`;
 }
 
