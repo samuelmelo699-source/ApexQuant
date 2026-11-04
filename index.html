@@ -1684,11 +1684,11 @@ function simulate(ev, P) {
 // Each projection = role-based prior blended with the player's own recency-weighted last-10 average,
 // scaled by tonight's team projection vs the team's season scoring. Prior weight: NBA 3 games, NFL 2.
 const LOG_STATS = {
-  nba_pts: ['points'], nba_reb: ['totalRebounds', 'rebounds'], nba_ast: ['assists'], nba_3pm: ['threePointFieldGoalsMade', 'threePointsMade'],
+  nba_pts: ['points'], nba_reb: ['totalRebounds', 'rebounds'], nba_ast: ['assists'], nba_3pm: ['threePointFieldGoalsMade', 'threePointsMade'], nba_blk: ['blocks'], nba_stl: ['steals'],
   pass_yds: ['passingYards'], pass_td: ['passingTouchdowns'], pass_int: ['interceptions'], pass_cmp: ['completions'], pass_att: ['passingAttempts'],
   rush_yds: ['rushingYards'], rush_att: ['rushingAttempts'], rec: ['receptions'], rec_yds: ['receivingYards']
 };
-const LOG_SUMS = { nba_pra: ['nba_pts', 'nba_reb', 'nba_ast'] };
+const LOG_SUMS = { nba_pra: ['nba_pts', 'nba_reb', 'nba_ast'], nba_pr: ['nba_pts', 'nba_reb'], nba_pa: ['nba_pts', 'nba_ast'], nba_ra: ['nba_reb', 'nba_ast'], rush_rec_yds: ['rush_yds', 'rec_yds'] };
 const ENV_ALPHA = { pass_int: 0, rec: 0.3, rush_att: 0.3, pass_att: 0.3, nba_reb: 0.3 };
 function statFrom(names, stats, wants) {
   for (const w of wants) {
@@ -1885,7 +1885,36 @@ function playerMarkets(ev, sim) {
     }
   }
   try { applyMatchupLayer(ev, sim, out); } catch (e) { console.warn('matchup layer', e); }
+  try { out.derived = derivedMarkets(out, sport); } catch (e) { out.derived = []; }
   return out;
+}
+// Extra prop markets built only from the model's own projections (no betting lines): combos, double-double,
+// rush+rec yards, NHL assists. Used to give prop outliers a model %; not shown as rows in the props table.
+function derivedMarkets(rows, sport) {
+  const by = new Map(), extra = [];
+  for (const r of rows) by.set(`${r.playerId}|${r.market}`, r);
+  const mk = (base, market, label, fields) => { const row = { ...base, id: base.id.replace(/:[^:]+$/, ':' + market), market, label, basis: 'from the model\'s own projections', derived: true, ...fields };
+    delete row.mx; if (!row.binary) { delete row.prob; row.fair = fairLine(row); } extra.push(row); };
+  const sumN = (...rs) => ({ mean: rs.reduce((a, r) => a + r.mean, 0), sd: Math.hypot(...rs.map(r => r.sd || Math.sqrt(Math.max(r.mean, 0.5)))), dist: 'normal', binary: false });
+  for (const pid of new Set(rows.map(r => r.playerId))) {
+    const g = m => by.get(`${pid}|${m}`);
+    const P = g('nba_pts'), R = g('nba_reb'), A = g('nba_ast');
+    if (P && R && A) {
+      mk(P, 'nba_pr', 'Pts + Reb', sumN(P, R)); mk(P, 'nba_pa', 'Pts + Ast', sumN(P, A)); mk(P, 'nba_ra', 'Reb + Ast', sumN(R, A));
+      const ten = r => 1 - normCdf((9.5 - r.mean) / Math.max(r.sd, 0.8)), pp = ten(P), pr = ten(R), pa = ten(A);
+      mk(P, 'nba_dd', 'Double-Double', { binary: true, prob: clamp(pp * pr + pp * pa + pr * pa - 2 * pp * pr * pa, 0.003, 0.97), dist: undefined });
+      // blocks / steals: the player's own recent per-game rate (game logs), pulled toward a league-average prior
+      for (const [m, label, prior] of [['nba_blk', 'Blocks', 0.5], ['nba_stl', 'Steals', 0.8]]) {
+        const lg = logSeries(sport, pid, m);
+        if (lg && lg.n >= 3) mk(P, m, label, { mean: Math.max(0.03, (lg.n * lg.mean + 3 * prior) / (lg.n + 3)), dist: 'poisson', binary: false });
+      }
+    }
+    const RY = g('rush_yds'), CY = g('rec_yds');
+    if (RY && CY) mk(RY, 'rush_rec_yds', 'Rush + Rec Yards', sumN(RY, CY));
+    const NP = g('nhl_pts'), NG = g('nhl_goal');
+    if (NP && NG) { const lamG = -Math.log(1 - clamp(NG.prob, 0.001, 0.95)); mk(NP, 'nhl_ast', 'Assists', { mean: Math.max(0.02, NP.mean - lamG), dist: 'poisson', binary: false }); }
+  }
+  return extra;
 }
 
 /* =====================================================================
@@ -3347,20 +3376,20 @@ const MKT_META = {
   player_rush_attempts:    { label: 'Rush Attempts',    dist: 'normal',  sd: L => Math.max(2.4, 0.28 * L), model: 'rush_att' },
   player_receptions:       { label: 'Receptions',       dist: 'poisson', model: 'rec' },
   player_reception_yds:    { label: 'Rec Yards',        dist: 'normal',  sd: L => Math.max(12, 0.55 * L), model: 'rec_yds' },
-  player_rush_reception_yds: { label: 'Rush + Rec Yards', dist: 'normal', sd: L => Math.max(15, 0.42 * L) },
+  player_rush_reception_yds: { label: 'Rush + Rec Yards', dist: 'normal', sd: L => Math.max(15, 0.42 * L), model: 'rush_rec_yds' },
   player_anytime_td:       { label: 'Anytime TD',       dist: 'binary',  model: 'anytime_td' },
   // NBA
   player_points:           { label: 'Points',           dist: 'normal',  sd: L => Math.max(4, 0.28 * L), model: 'nba_pts' },
   player_rebounds:         { label: 'Rebounds',         dist: 'normal',  sd: L => Math.max(2, 0.33 * L), model: 'nba_reb' },
   player_assists:          { label: 'Assists',          dist: 'normal',  sd: L => Math.max(1.5, 0.38 * L), model: 'nba_ast' },
   player_threes:           { label: 'Threes',           dist: 'poisson', model: 'nba_3pm' },
-  player_blocks:           { label: 'Blocks',           dist: 'poisson' },
-  player_steals:           { label: 'Steals',           dist: 'poisson' },
+  player_blocks:           { label: 'Blocks',           dist: 'poisson', model: 'nba_blk' },
+  player_steals:           { label: 'Steals',           dist: 'poisson', model: 'nba_stl' },
   player_points_rebounds_assists: { label: 'Pts + Reb + Ast', dist: 'normal', sd: L => Math.max(5, 0.22 * L), model: 'nba_pra' },
-  player_points_rebounds:  { label: 'Pts + Reb',        dist: 'normal',  sd: L => Math.max(4.5, 0.24 * L) },
-  player_points_assists:   { label: 'Pts + Ast',        dist: 'normal',  sd: L => Math.max(4.5, 0.25 * L) },
-  player_rebounds_assists: { label: 'Reb + Ast',        dist: 'normal',  sd: L => Math.max(2.5, 0.3 * L) },
-  player_double_double:    { label: 'Double-Double',    dist: 'binary' }
+  player_points_rebounds:  { label: 'Pts + Reb',        dist: 'normal',  sd: L => Math.max(4.5, 0.24 * L), model: 'nba_pr' },
+  player_points_assists:   { label: 'Pts + Ast',        dist: 'normal',  sd: L => Math.max(4.5, 0.25 * L), model: 'nba_pa' },
+  player_rebounds_assists: { label: 'Reb + Ast',        dist: 'normal',  sd: L => Math.max(2.5, 0.3 * L), model: 'nba_ra' },
+  player_double_double:    { label: 'Double-Double',    dist: 'binary', model: 'nba_dd' }
 };
 // NHL uses some of the same market keys as the NBA ("player_points", "player_assists") with different meaning.
 const MKT_META_NHL = {
@@ -3368,7 +3397,7 @@ const MKT_META_NHL = {
   player_shots_on_goal:       { label: 'Shots on Goal', dist: 'poisson', model: 'nhl_sog' },
   player_total_saves:         { label: 'Saves',         dist: 'normal',  sd: L => Math.max(4.5, 0.2 * L), model: 'nhl_saves' },
   player_goal_scorer_anytime: { label: 'Anytime Goal',  dist: 'binary',  model: 'nhl_goal' },
-  player_assists:             { label: 'Assists',       dist: 'poisson' },
+  player_assists:             { label: 'Assists',       dist: 'poisson', model: 'nhl_ast' },
   player_blocked_shots:       { label: 'Blocked Shots', dist: 'poisson' }
 };
 // Soccer player props: priced against the other books only (no player model)
@@ -3597,13 +3626,19 @@ function computeOutliers() {
   if (OL_SPORTS[APP.sport] && SPORTS[APP.sport].props) { try { refreshAllSims(); } catch {} }
   const rows = [];
   const modelIndex = new Map();
-  for (const sim of APP.simCache.values()) for (const r of sim.players || []) modelIndex.set(`${normName(r.name)}|${r.market}`, r);
+  const loose = new Map(), addLoose = (k, r) => loose.set(k, loose.has(k) && loose.get(k)?.playerId !== r.playerId ? null : r);
+  const parts = n => { const w = normName(n).split(' ').filter(Boolean); return { first: w[0] || '', last: w[w.length - 1] || '' }; };
+  for (const sim of APP.simCache.values()) for (const r of [...(sim.players || []), ...(sim.players?.derived || [])]) {
+    modelIndex.set(`${normName(r.name)}|${r.market}`, r);
+    const { first, last } = parts(r.name); addLoose(`${first[0]}|${last}|${r.market}`, r); addLoose(`${last}|${r.market}`, r);
+  }
+  const findModel = (name, market) => { if (!market) return null; const ex = modelIndex.get(`${normName(name)}|${market}`); if (ex) return ex; const { first, last } = parts(name); return loose.get(`${first[0]}|${last}|${market}`) || loose.get(`${last}|${market}`) || null; };
   for (const { sport, ev, data, t: fetchedAt } of OL.data.values()) {
     const label = `${shortTeam(ev.away_team)} @ ${shortTeam(ev.home_team)}`;
     for (const g of buildGroups(data, sport).values()) {
       const books = new Set(g.quotes.map(q => q.book));
       if (books.size < STORE.ol.minBooks) continue;
-      const model = g.meta.model ? modelIndex.get(`${normName(g.player)}|${g.meta.model}`) : null;
+      const model = findModel(g.player, g.meta.model);
       const candidates = new Map();
       for (const q of g.quotes) {
         if (g.meta.dist === 'binary' ? !/^yes$/i.test(q.side) : (q.line === null || !/^(over|under)$/i.test(q.side))) continue;
@@ -3642,6 +3677,18 @@ async function scanOutliers(force = false) {
   if (OL.busy) return;
   if (!hasOdds()) { $('olStatus').innerHTML = '<span class="amber">Add your Odds API key first.</span>'; return; }
   OL.busy = true; OL.errors = []; $('olScanBtn').disabled = true;
+  const tab0 = STORE.ol.tab;
+  if (SPORTS[tab0]?.props) {
+    try {
+      if (APP.sport !== tab0) {   // the model % needs that sport's games, rosters and logs: switch the top sport to it
+        $('olStatus').textContent = `Loading the ${spLabel(tab0)} model (games, rosters, game logs) so the cards get a model %…`;
+        APP.sport = tab0; APP.eventId = null; APP.simCache.clear(); renderChrome();
+        await syncSport(false, true);
+      }
+      $('olStatus').textContent = `Loading ${spLabel(tab0)} rosters and game logs…`;
+      await preloadSlate();
+    } catch (e) { logReq('outliers model', 'error', e.message); }
+  }
   const cache = olCacheLoad(), now = Date.now();
   const bk = STORE.ol.books;
   try {
