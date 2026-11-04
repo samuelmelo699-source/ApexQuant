@@ -310,6 +310,10 @@
         <div><label class="muted" for="pfMarket">Market</label><select id="pfMarket" style="width:100%"></select></div>
         <div><label class="muted" for="pfGame">Game</label><select id="pfGame" style="width:100%"></select></div>
         <div><label class="row" style="margin-top:1.3rem"><input type="checkbox" id="pfPriced"> Only priced rows</label></div>
+        <div><label class="muted" for="pfSort">Sort by</label><select id="pfSort" style="width:100%">
+          <option value="ev">EV % (best first)</option><option value="model">Model % (highest first)</option><option value="fair">Books' fair % (highest first)</option><option value="hit">Hit rate % (highest first)</option></select></div>
+        <div><label class="muted" for="pfSide">Show</label><select id="pfSide" style="width:100%">
+          <option value="all">Overs &amp; unders</option><option value="O">Overs only (incl. yes bets)</option><option value="U">Unders only</option></select></div>
       </div>
       <div id="pfBody"></div>
     </div>
@@ -3100,9 +3104,23 @@ function renderPropFinder() {
   mk.value = markets.some(([k]) => k === prevM) ? prevM : '';
   gm.value = games.includes(prevG) ? prevG : '';
   const q = $('pfSearch').value.trim().toLowerCase();
+  STORE.pf = { sort: 'ev', side: 'all', ...(STORE.pf || {}) };
+  $('pfSort').value = STORE.pf.sort; $('pfSide').value = STORE.pf.side;
+  // the model's side for each row: binary bets are "yes" (over); otherwise whichever of over/under it gives more
+  const lean = r => { if (r.binary) return { side: 'O', p: r.prob };
+    const e = propEval(r), d = Math.max(1e-9, e.p.over + e.p.under), pO = e.p.over / d; return { side: pO >= 0.5 ? 'O' : 'U', p: Math.max(pO, 1 - pO), e }; };
+  const sortVal = r => {
+    const k = STORE.pf.sort, L = lean(r);
+    if (k === 'model') return L.p;
+    if (k === 'fair') { const bk = STORE.propBook[r.id]; if (r.binary || !bk?.over || !bk?.under) return null; const f = devig(bk.over, bk.under); return L.side === 'O' ? f : 1 - f; }
+    if (k === 'hit') { if (r.binary) return null; const logs = logAll(APP.sport, r.playerId, r.market); const line = propEval(r).line; if (!logs?.length || line == null) return null;
+      const win = (logs.length >= 10 ? logs.slice(0, 10) : logs).filter(g => g.v !== line); if (!win.length) return null; const o = win.filter(g => g.v > line).length / win.length; return L.side === 'O' ? o : 1 - o; }
+    return r.binary ? (STORE.tdBook[r.id] ? evPerDollar(r.prob, 1 - r.prob, STORE.tdBook[r.id]) : null) : (propEval(r).best?.ev ?? null);
+  };
   const rows = all.filter(r => (!mk.value || r.market === mk.value) && (!gm.value || r.game === gm.value) &&
-    (!q || r.name.toLowerCase().includes(q) || r.team.toLowerCase().includes(q)) && (!$('pfPriced').checked || propEval(r).priced))
-    .sort((a, b) => (propEval(b).best?.ev ?? -9) - (propEval(a).best?.ev ?? -9));
+    (!q || r.name.toLowerCase().includes(q) || r.team.toLowerCase().includes(q)) && (!$('pfPriced').checked || propEval(r).priced) &&
+    (STORE.pf.side === 'all' || lean(r).side === STORE.pf.side))
+    .map(r => [r, sortVal(r)]).sort((a, b) => (b[1] ?? -9) - (a[1] ?? -9)).map(x => x[0]);
   $('pfBody').innerHTML = all.length ? propTable(rows, true) : '<div class="inset xs muted">Open a game with loaded rosters to populate props.</div>';
 }
 
@@ -5890,6 +5908,8 @@ function bind() {
   $('tab-td').addEventListener('click', onPaste); $('tab-td30').addEventListener('click', onPaste);
 
   for (const id of ['pfSearch', 'pfMarket', 'pfGame', 'pfPriced']) $(id).addEventListener(id === 'pfSearch' ? 'input' : 'change', renderPropFinder);
+  $('pfSort').addEventListener('change', e => { STORE.pf = { ...(STORE.pf || {}), sort: e.target.value }; save(); renderPropFinder(); });
+  $('pfSide').addEventListener('change', e => { STORE.pf = { ...(STORE.pf || {}), side: e.target.value }; save(); renderPropFinder(); });
   $('auditSearch').addEventListener('input', renderAudit);
 
   $('csvBtn').addEventListener('click', () => {
