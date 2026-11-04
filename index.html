@@ -4004,7 +4004,7 @@ async function apsLeagues(sp, fresh = false) {
     const r = await apsOne(lg, fresh);
     out.list.push(...r.list); out.season.push(r.season); out.name.push(r.name);
     if (!out.dbg) out.dbg = r.dbg;
-    else { const d = out.dbg, e = r.dbg; d.league += ` + ${e.league}`; d.season = [...new Set([d.season, e.season])].join(' / '); for (const k of ['games', 'upcoming', 'oddsGames', 'matched', 'past', 'withLines']) d[k] = (d[k] || 0) + (e[k] || 0);
+    else { const d = out.dbg, e = r.dbg; d.league += ` + ${e.league}`; d.season = [...new Set([d.season, e.season])].join(' / '); for (const k of ['games', 'upcoming', 'soon', 'oddsGames', 'matched', 'past', 'withLines']) d[k] = (d[k] || 0) + (e[k] || 0);
       d.nextGame = [d.nextGame, e.nextGame].filter(Boolean).sort((a, b) => a - b)[0] || null; d.betNames = [...new Set([...d.betNames, ...e.betNames])].slice(0, 8); d.books = [...new Set([...d.books, ...e.books])].slice(0, 8); }
   }
   return { list: out.list, season: [...new Set(out.season)].join(' / '), name: out.name.join(' + '), dbg: out.dbg };
@@ -4016,19 +4016,17 @@ async function apsOne(lg, fresh = false) {
   const season = String((ss.find(x => x.start && x.end && x.start <= today && today <= x.end) || ss[ss.length - 1] || {}).season || '');
   const gj = await apsGet('games', { league: lg.id, season, timezone: 'UTC', ...F });
   const games = new Map((gj.response || []).map(g => [g.id, g])), now = Date.now(), list = [];
-  const dbg = { league: `${lg.name} #${lg.id}`, season, games: games.size, upcoming: [...games.values()].filter(g => Date.parse(g.date) > now).length, oddsGames: 0, matched: 0, past: 0, betNames: new Set(), books: new Set() };
-  let page = 1, total = 1;
-  do {
-    const oj = await apsGet('odds', { league: lg.id, season, ...(page > 1 ? { page } : {}), ...F });
-    total = oj.paging?.total || 1;
-    for (const o of oj.response || []) {
+  const dbg = { league: `${lg.name} #${lg.id}`, season, soon: 0, games: games.size, upcoming: [...games.values()].filter(g => Date.parse(g.date) > now).length, oddsGames: 0, matched: 0, past: 0, betNames: new Set(), books: new Set() };
+  const seen = new Set();
+  const useOdds = o => {
+      if (seen.has(o.game?.id)) return; seen.add(o.game?.id);
       dbg.oddsGames++;
       for (const b of o.bookmakers || []) { dbg.books.add(b.name); for (const bet of b.bets || []) dbg.betNames.add(bet.name); }
-      const g = games.get(o.game?.id); if (!g) continue;
+      const g = games.get(o.game?.id); if (!g) return;
       dbg.matched++;
-      const start = Date.parse(g.date); if (!(start > now)) { dbg.past++; continue; }
+      const start = Date.parse(g.date); if (!(start > now)) { dbg.past++; return; }
       dbg.next = Math.min(dbg.next ?? Infinity, start);
-      const H = g.teams?.home?.name, A = g.teams?.away?.name; if (!H || !A) continue;
+      const H = g.teams?.home?.name, A = g.teams?.away?.name; if (!H || !A) return;
       const bookmakers = (o.bookmakers || []).map(b => {
         const markets = [];
         for (const bet of b.bets || []) {
@@ -4044,9 +4042,18 @@ async function apsOne(lg, fresh = false) {
         return { key: String(b.name || b.id).toLowerCase().replace(/[^a-z0-9]/g, ''), title: b.name || String(b.id), last_update: null, markets };
       }).filter(b => b.markets.length);
       if (bookmakers.length) list.push({ id: `aps${g.id}`, home_team: H, away_team: A, commence_time: new Date(start).toISOString(), bookmakers });
-    }
+  };
+  let page = 1, total = 1;
+  do {                                     // league odds list (finished games fill the first pages)
+    const oj = await apsGet('odds', { league: lg.id, season, ...(page > 1 ? { page } : {}), ...F });
+    total = oj.paging?.total || 1; dbg.pages = total;
+    for (const o of oj.response || []) useOdds(o);
     page++;
-  } while (page <= Math.min(total, 3));
+  } while (page <= Math.min(total, 1));   // one page is enough: upcoming games are fetched one by one below
+  // then game by game for everything in the next 36 h that still has no odds
+  const soon = [...games.values()].filter(g => { const t = Date.parse(g.date); return t > now && t - now < 36 * 3600e3 && !seen.has(g.id); }).sort((a, b) => Date.parse(a.date) - Date.parse(b.date)).slice(0, 12);
+  dbg.soon = soon.length + [...games.values()].filter(g => { const t = Date.parse(g.date); return t > now && t - now < 36 * 3600e3 && seen.has(g.id); }).length;
+  for (const g of soon) { try { const oj = await apsGet('odds', { game: g.id, ...F }); for (const o of oj.response || []) useOdds(o.game?.id ? o : { ...o, game: { id: g.id } }); } catch (e) { dbg.err = e.message; } }
   dbg.withLines = list.length;
   dbg.nextGame = [...games.values()].map(g => Date.parse(g.date)).filter(t => t > now).sort((a, b) => a - b)[0] || null;
   return { list, season, name: lg.name, dbg: { ...dbg, betNames: [...dbg.betNames].slice(0, 8), books: [...dbg.books].slice(0, 8) } };
@@ -4311,7 +4318,7 @@ function renderGLO() {
   $('gloStatus').innerHTML = (GLO.err ? `<div class="banner bad">${esc(GLO.err)}</div>` : '') + (m
     ? `${spLabel(sport)}: ${m.n} games · lines from ${m.server ? 'the background job' : m.src ? `${m.src} (international books, decimal odds converted)` : 'the books'} at ${hhmm(m.t)}${m.server || m.src ? ' (no Odds API credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
     : `<span class="muted">Press Load to price ${spLabel(sport)} ${isSoc(sport) || BOOKS_ONLY[sport] ? 'moneylines and over/unders' : `moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals`}. ${BOOKS_ONLY[sport] ? 'Odds come from API-Sports (the current season needs a paid API-Sports plan); about 3 API-Sports requests per load, cached 30 min.' : `About ${isSoc(sport) ? 2 : 3} credits, or free if the lines were downloaded in the last 30 min.`}</span>`);
-  if (m?.dbg && !m.n) { const d = m.dbg; $('gloStatus').innerHTML += `<div class="xs muted" style="margin-top:.3rem">API-Sports check: ${esc(d.league)} season ${esc(d.season)} · ${d.games} games in the schedule, ${d.upcoming} still to play · odds posted for ${d.oddsGames} games${d.past != null ? ` (${d.past} already played, ${d.matched - d.past} upcoming, ${d.withLines} with moneyline/over-under)` : ''}${d.past === d.matched && d.matched ? ` · <b>No odds posted yet for upcoming games</b>: API-Sports usually adds them about a day before tip-off${d.nextGame ? ` (next game ${new Date(d.nextGame).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })})` : ''}. Try again later.` : ''}${d.betNames.length ? ` · bet types: ${esc(d.betNames.join(', '))}` : ''}${d.books.length ? ` · books: ${esc(d.books.join(', '))}` : ''}</div>`; }
+  if (m?.dbg && !m.n) { const d = m.dbg; $('gloStatus').innerHTML += `<div class="xs muted" style="margin-top:.3rem">API-Sports check: ${esc(d.league)} season ${esc(d.season)} · ${d.games} games in the schedule, ${d.upcoming} still to play (${d.soon ?? 0} in the next 36 h) · odds posted for ${d.oddsGames} games${d.past != null ? ` (${d.past} already played, ${d.matched - d.past} upcoming, ${d.withLines} with moneyline/over-under)` : ''}${d.past === d.matched && d.matched ? ` · <b>No odds posted yet for upcoming games</b>: API-Sports usually adds them about a day before tip-off${d.nextGame ? ` (next game ${new Date(d.nextGame).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })})` : ''}. Try again later.` : ''}${d.betNames.length ? ` · bet types: ${esc(d.betNames.join(', '))}` : ''}${d.books.length ? ` · books: ${esc(d.books.join(', '))}` : ''}</div>`; }
   if (!m) { $('gloBody').innerHTML = ''; return; }
   if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline, spread or total outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
   $('gloBody').innerHTML = `<div class="ol-grid">${rows.map(r => {
