@@ -1795,12 +1795,22 @@ async function ensureLogs(events) {
 }
 
 /* ---------- player markets ---------- */
+// The model's projection is itself uncertain (minutes, role, matchup), not just the game-to-game randomness.
+// PROJ_ERR = typical projection error as a share of the projection (normal stats); POIS_MIX = spread of the
+// expected count for count stats (over-dispersion). Without these, small projection gaps turned into 95%+ calls.
+const PROJ_ERR = { nba_pts: 0.20, nba_reb: 0.25, nba_ast: 0.28, nba_pra: 0.17, nba_pr: 0.18, nba_pa: 0.18, nba_ra: 0.22,
+  pass_yds: 0.18, pass_cmp: 0.15, pass_att: 0.13, rush_yds: 0.30, rush_att: 0.22, rec_yds: 0.32, rush_rec_yds: 0.28, nhl_saves: 0.15 };
+const POIS_MIX = { nba_3pm: 0.35, nba_blk: 0.4, nba_stl: 0.4, rec: 0.25, pass_td: 0.3, pass_int: 0.3, nhl_pts: 0.3, nhl_sog: 0.25, nhl_ast: 0.3 };
+const sdEff = row => Math.hypot(row.sd || 0, (PROJ_ERR[row.market] ?? 0.2) * Math.max(row.mean, 0));
 function probAtLine(row, line) {
   // Integer-valued stats: over = P(X >= floor(L)+1), under = P(X <= ceil(L)-1); whole-number lines can push.
   const hiK = Math.floor(line) + 1, loK = Math.ceil(line) - 1;
   let over, under;
-  if (row.dist === 'poisson') { over = 1 - poissonCdf(hiK - 1, row.mean); under = poissonCdf(loK, row.mean); }
-  else { over = 1 - normCdf((hiK - 0.5 - row.mean) / row.sd); under = normCdf((loK + 0.5 - row.mean) / row.sd); }
+  if (row.dist === 'poisson') {
+    const c = POIS_MIX[row.market] ?? 0.25, lams = [row.mean * (1 - c), row.mean, row.mean * (1 + c)], ws = [0.25, 0.5, 0.25];
+    over = lams.reduce((a, l, i) => a + ws[i] * (1 - poissonCdf(hiK - 1, Math.max(l, 0.01))), 0);
+    under = lams.reduce((a, l, i) => a + ws[i] * poissonCdf(loK, Math.max(l, 0.01)), 0);
+  } else { const sd = sdEff(row); over = 1 - normCdf((hiK - 0.5 - row.mean) / sd); under = normCdf((loK + 0.5 - row.mean) / sd); }
   return { over: clamp(over, 0, 1), under: clamp(under, 0, 1), push: clamp(1 - over - under, 0, 1) };
 }
 function fairLine(row) { // half-point line nearest to 50/50
@@ -1898,8 +1908,8 @@ function playerMarkets(ev, sim) {
         const pra = p + reb + ast;
         add(s, 'nba_pra', 'Pts + Reb + Ast', pra, Math.max(5, Math.hypot(p * 0.28, reb * 0.33, ast * 0.38)), 'normal');
         add(s, 'nba_3pm', 'Threes made', p * 0.11, 0, 'poisson');
-        addTd(s, 'nba_20', '20+ points', 1 - normCdf((19.5 - ptsRow.mean) / ptsRow.sd));
-        addTd(s, 'nba_30', '30+ points', 1 - normCdf((29.5 - ptsRow.mean) / ptsRow.sd));
+        addTd(s, 'nba_20', '20+ points', 1 - normCdf((19.5 - ptsRow.mean) / sdEff({ ...ptsRow, market: 'nba_pts' })));
+        addTd(s, 'nba_30', '30+ points', 1 - normCdf((29.5 - ptsRow.mean) / sdEff({ ...ptsRow, market: 'nba_pts' })));
       } else if (sport === 'NHL') {
         const f = Math.sqrt(pts / 3.05);
         if (s.group === 'G') {
@@ -1931,8 +1941,8 @@ function derivedMarkets(rows, sport) {
     const P = g('nba_pts'), R = g('nba_reb'), A = g('nba_ast');
     if (P && R && A) {
       mk(P, 'nba_pr', 'Pts + Reb', sumN(P, R)); mk(P, 'nba_pa', 'Pts + Ast', sumN(P, A)); mk(P, 'nba_ra', 'Reb + Ast', sumN(R, A));
-      const ten = r => 1 - normCdf((9.5 - r.mean) / Math.max(r.sd, 0.8)), pp = ten(P), pr = ten(R), pa = ten(A);
-      mk(P, 'nba_dd', 'Double-Double', { binary: true, prob: clamp(pp * pr + pp * pa + pr * pa - 2 * pp * pr * pa, 0.003, 0.97), dist: undefined, comps: [P, R, A].map(r => ({ mean: r.mean, sd: Math.max(r.sd || 1, 0.8) })) });
+      const ten = r => 1 - normCdf((9.5 - r.mean) / Math.max(sdEff(r), 0.8)), pp = ten(P), pr = ten(R), pa = ten(A);
+      mk(P, 'nba_dd', 'Double-Double', { binary: true, prob: clamp(pp * pr + pp * pa + pr * pa - 2 * pp * pr * pa, 0.003, 0.97), dist: undefined, comps: [P, R, A].map(r => ({ mean: r.mean, sd: Math.max(sdEff(r), 0.8) })) });
       // blocks / steals: the player's own recent per-game rate (game logs), pulled toward a league-average prior
       for (const [m, label, prior] of [['nba_blk', 'Blocks', 0.5], ['nba_stl', 'Steals', 0.8]]) {
         const lg = logSeries(sport, pid, m);
@@ -2165,11 +2175,20 @@ function applyMatchupLayer(ev, sim, rows) {
             const nm = w * (proj.pts + proj.reb + proj.ast) + (1 - w) * r.mean, ratio = nm / r.mean;
             r.sd = Math.max(r.sd * 0.75, r.sd * Math.sqrt(ratio)); r.mean = nm; r.fair = fairLine(r);
           }
+          // guardrail (his own stats, no betting lines): keep the projection within ~30% of his average this season
+          if (s || r.market === 'nba_pra') {
+            const lg = logAll('NBA', pid, r.market);
+            if (lg && lg.length >= 3) {
+              const avg = lg.reduce((a, x) => a + x.v, 0) / lg.length, band = Math.max(0.3 * avg, r.market === 'nba_3pm' ? 1 : 3);
+              const capped = clamp(r.mean, Math.max(0, avg - band), avg + band);
+              if (Math.abs(capped - r.mean) > 0.05) { r.capNote = `kept within 30% of his season average (${fmtN(avg)}); raw projection was ${fmtN(r.mean)}`; if (r.dist === 'normal') r.sd *= Math.sqrt(Math.max(capped, 0.5) / Math.max(r.mean, 0.5)); r.mean = capped; r.fair = fairLine(r); }
+            }
+          }
           r.mx = { min: minutes, minBase: R.min, minSeason: R.minSeason, notes: P.notes, pos: g, posF: g && D?.f?.[g] ? D.f[g] : null, defN: D?.n || 0, n: R.n };
-          if (s || r.market === 'nba_pra') r.basis = `${minutes.toFixed(1)} min × per-min rate`;
+          if (s || r.market === 'nba_pra') r.basis = `${minutes.toFixed(1)} min × per-min rate${r.capNote ? ' · capped near season avg' : ''}`;
         }
         const pr = prs.find(r => r.market === 'nba_pts');
-        if (pr) for (const r of prs) if (r.market === 'nba_20' || r.market === 'nba_30') r.prob = clamp(1 - normCdf(((r.market === 'nba_20' ? 19.5 : 29.5) - pr.mean) / pr.sd), 0.005, 0.95);
+        if (pr) for (const r of prs) if (r.market === 'nba_20' || r.market === 'nba_30') r.prob = clamp(1 - normCdf(((r.market === 'nba_20' ? 19.5 : 29.5) - pr.mean) / sdEff(pr)), 0.005, 0.95);
       }
     } else if (D && DEF_STAT[sport] || (sport === 'NFL' && weatherEffect(ev))) {
       const W = sport === 'NFL' ? weatherEffect(ev) : null;
@@ -2947,7 +2966,8 @@ function propTable(rows, withGame) {
         <td><input type="number" step="5" class="mono" data-pb="${esc(r.id)}" data-f="under" value="${x.bk?.under ?? ''}" placeholder="−110">${x.bk?.underBook ? `<div class="xs muted">${esc(x.bk.underBook)}</div>` : ''}</td>
         <td class="mono">${pct(x.p.over)}</td><td class="mono">${pct(x.p.under)}</td>
         <td class="mono xs" style="white-space:nowrap"><div><span class="muted">Model</span> O <b>${fmtOdds(toAmerican(mO))}</b> · U <b>${fmtOdds(toAmerican(1 - mO))}</b></div>
-          <div><span class="muted">Books</span> ${bF === null ? '<span class="muted">—</span>' : `O ${fmtOdds(toAmerican(bF))} · U ${fmtOdds(toAmerican(1 - bF))}`}</div></td>
+          <div><span class="muted">Books</span> ${bF === null ? '<span class="muted">—</span>' : `O ${fmtOdds(toAmerican(bF))} · U ${fmtOdds(toAmerican(1 - bF))}`}</div>
+          ${bF !== null && Math.abs(mO - bF) > 0.25 ? `<div class="amber" title="The model and the books are more than 25 points apart. Usually the model is missing news (minutes, injury, role) or the line is for a different spot. Open Why ▾ to see what drives the projection.">⚠ ${Math.round(Math.abs(mO - bF) * 100)} pts from books: check Why</div>` : ''}</td>
         <td class="mono ${x.best?.ev > 0 ? 'pos' : x.best ? 'neg' : 'muted'}">${x.best ? `${x.best.side} $${x.best.ev.toFixed(3)}` : '—'}</td>
 </tr>${whyRow(r.id, withGame ? 13 : 12)}`;
     }).join('')}</tbody></table></div>`;
