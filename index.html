@@ -3982,7 +3982,12 @@ async function oddsSportsList() {
 async function apsGet(path, params) {
   const j = await serverJSON(`/api/apisports/${path}?${new URLSearchParams(params)}`);
   const errs = j.errors && (Array.isArray(j.errors) ? j.errors : Object.values(j.errors));
-  if (errs && errs.length) throw new Error(`API-Sports: ${errs.join('; ')}`);
+  if (errs && errs.length) {
+    const msg = errs.join('; ');
+    if (/free plans? do not have access to this season/i.test(msg)) throw new Error('Your API-Sports plan is the free one, which only covers past seasons (2022–2024). Current CBA odds need a paid API-Sports plan; once you upgrade, the same key starts working here (no change needed).');
+    if (/request limit|too many requests|rate ?limit/i.test(msg)) throw new Error(`API-Sports daily request limit reached. It resets daily; cached CBA odds are reused until then. (${msg})`);
+    throw new Error(`API-Sports: ${msg}`);
+  }
   return j;
 }
 const decToAm = d => { d = +d; if (!(d > 1.0001)) return null; return d >= 2 ? Math.round((d - 1) * 100) : Math.round(-100 / (d - 1)); };
@@ -4280,7 +4285,7 @@ function renderGLO() {
   const rows = base.filter(r => !(o.hideStale && r.stale)).sort((a, b) => ((sv(b) ?? -Infinity) - (sv(a) ?? -Infinity)) || b.ev - a.ev).slice(0, 120);
   $('gloStatus').innerHTML = (GLO.err ? `<div class="banner bad">${esc(GLO.err)}</div>` : '') + (m
     ? `${spLabel(sport)}: ${m.n} games · lines from ${m.server ? 'the background job' : m.src ? `${m.src} (international books, decimal odds converted)` : 'the books'} at ${hhmm(m.t)}${m.server || m.src ? ' (no Odds API credits used)' : ''} · <b class="green">${rows.length} outliers</b>${hidden ? ` · ${hidden} stale hidden` : ''}`
-    : `<span class="muted">Press Load to price ${sport} ${isSoc(sport) || BOOKS_ONLY[sport] ? 'moneylines and over/unders' : `moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals`}. About 3 credits, or free if the lines were downloaded in the last 30 min.</span>`);
+    : `<span class="muted">Press Load to price ${spLabel(sport)} ${isSoc(sport) || BOOKS_ONLY[sport] ? 'moneylines and over/unders' : `moneylines, ${MARKET_NAMES[sport][0].toLowerCase()}s and totals`}. ${BOOKS_ONLY[sport] ? 'Odds come from API-Sports (the current season needs a paid API-Sports plan); about 3 API-Sports requests per load, cached 30 min.' : `About ${isSoc(sport) ? 2 : 3} credits, or free if the lines were downloaded in the last 30 min.`}</span>`);
   if (!m) { $('gloBody').innerHTML = ''; return; }
   if (!rows.length) { $('gloBody').innerHTML = '<div class="inset xs muted">No moneyline, spread or total outliers match. Game lines are sharp, so edges are smaller than props: try Min EV 1%.</div>'; return; }
   $('gloBody').innerHTML = `<div class="ol-grid">${rows.map(r => {
