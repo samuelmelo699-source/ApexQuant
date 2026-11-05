@@ -83,7 +83,7 @@ head-to-head over 3 seasons, charts and a 0-100 matchup score (30% defense/posit
 NFL: QB/RB/WR/TE from team rosters; comparable = same position with a similar workload (pass attempts, carries, targets or touches).
 Data: this season's ESPN box scores for every team (fetched once, then only new games) and ESPN game logs.
 
-## 🧪 Testing (NBA player prop explorer)
+## 🧪 PlayerLab (NBA + NFL player prop explorer)
 Pick a game, player and market (points … turnovers, FT/FG/3PT attempted, double/triple double). The line is the
 books' line (Load lines) or your own. Filters (Suggested / All Filters) narrow his game log: seasons (last 3),
 last 5/10/20, minutes near his average, H2H, splits (home/away, won/lost, rest), opponent-rank bands (def vs

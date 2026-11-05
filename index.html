@@ -243,7 +243,7 @@
       <button type="button" data-view="outliers">🔥 Prop outliers</button>
       <button type="button" data-view="first">🥇 First basket</button>
       <button type="button" data-view="analyzer">📈 Prop analyzer</button>
-      <button type="button" data-view="testing">🧪 Testing</button>
+      <button type="button" data-view="testing">🧪 PlayerLab</button>
       <button type="button" data-view="tracker">📐 Model report</button>
       <button type="button" data-view="audit">🛡️ Roster audit</button>
     </nav>
@@ -521,7 +521,7 @@
     <div class="card stack">
       <div class="row between" style="flex-wrap:wrap;gap:.5rem">
         <div>
-          <h2 class="sm xb">🧪 Testing · NBA player props</h2>
+          <h2 class="sm xb">🧪 PlayerLab <span class="seg ts-seg sm2" id="tsSport" style="margin-left:.4rem;vertical-align:middle"><button type="button" data-tssp="NBA">🏀 NBA</button><button type="button" data-tssp="NFL">🏈 NFL</button></span></h2>
           <p class="note" style="margin:0">Filter a player's games (seasons, sample, splits, opponent-rank bands, minutes and shot volume) and see the hit rate, average or median and diff vs the line, plus similar players against tonight's opponent. Data: ESPN game logs (3 seasons) and this season's box scores.</p>
         </div>
         <button type="button" id="tsLoadBtn" class="btn-go">Load lines</button>
@@ -5090,7 +5090,7 @@ function anGames(sp, tid) {
   for (const g of teamGames(sp, tid)) {
     if (new Date(g.date).getTime() < t0) continue;
     const b = c[`${sp}:${g.id}`]; if (!b?.pl?.length) continue;
-    out.push({ id: g.id, date: g.date, opp: g.opp, home: g.home, total: g.pf + g.pa, against: b.pl.filter(a => a[2] !== String(tid)).map(a => { const l = AN_SP[sp].line(a); l.pos = anPosOf(sp, l); return l; }) });
+    out.push({ id: g.id, date: g.date, opp: g.opp, home: g.home, total: g.pf + g.pa, pa: g.pa, against: b.pl.filter(a => a[2] !== String(tid)).map(a => { const l = AN_SP[sp].line(a); l.pos = anPosOf(sp, l); return l; }) });
   }
   return out;
 }
@@ -5323,57 +5323,79 @@ async function anOpen(id) {
    ===================================================================== */
 const TS = { busy: false, msg: '', loaded: false, page: 0, cw: 0, acc: new Set(['season']) };
 const tsAcc = k => `class="ts-acc" data-acc="${k}" ${TS.acc.has(k) ? 'open' : ''}`;
-const TS_MK = [
+const TS_MKS = {};
+TS_MKS.NBA = [
   ['pts', 'Points', l => l.pts, 'nba_pts'], ['reb', 'Rebounds', l => l.reb, 'nba_reb'], ['ast', 'Assists', l => l.ast, 'nba_ast'], ['tpm', 'Threes', l => l.tpm, 'nba_3pm'],
   ['pra', 'Pts+Reb+Ast', l => l.pts + l.reb + l.ast, 'nba_pra'], ['pr', 'Pts+Reb', l => l.pts + l.reb, 'nba_pr'], ['pa', 'Pts+Ast', l => l.pts + l.ast, 'nba_pa'], ['ra', 'Reb+Ast', l => l.reb + l.ast, 'nba_ra'],
   ['blk', 'Blocks', l => l.blk, 'nba_blk'], ['stl', 'Steals', l => l.stl, 'nba_stl'], ['sb', 'Stl+Blk', l => l.stl + l.blk, null], ['to', 'Turnovers', l => l.to, null],
   ['fta', 'FT Attempted', l => l.fta, null], ['fga', 'FG Attempted', l => l.fga, null], ['tpa', '3PT Attempted', l => l.tpa, null],
   ['dd', 'Double Double', l => ['pts', 'reb', 'ast', 'blk', 'stl'].filter(k => l[k] >= 10).length >= 2 ? 1 : 0, 'nba_dd'], ['td', 'Triple Double', l => ['pts', 'reb', 'ast', 'blk', 'stl'].filter(k => l[k] >= 10).length >= 3 ? 1 : 0, null]];
-const tsMk = k => TS_MK.find(m => m[0] === k) || TS_MK[0];
-const tsBin = k => k === 'dd' || k === 'td';
-// box-score value of a market for an opposing player line (for defense ranks); markets the box doesn't carry fall back to points
-const tsBoxVal = (k, l) => { const m = tsMk(k); return ['to', 'fta', 'fga', 'tpa'].includes(k) ? l.pts : m[2]({ ...l, to: 0, fta: 0, fga: 0, tpa: 0 }); };
-const tsSeasonOf = d => { const x = new Date(d), y = x.getMonth() >= 8 ? x.getFullYear() : x.getFullYear() - 1; return `${String(y % 100).padStart(2, '0')}/${String((y + 1) % 100).padStart(2, '0')}`; };
+TS_MKS.NFL = [
+  ['cyd', 'Rec Yds', l => l.cyd, 'rec_yds'], ['rec', 'Receptions', l => l.rec, 'rec'], ['tgt', 'Targets', l => l.tgt, null], ['ryd', 'Rush Yds', l => l.ryd, 'rush_yds'], ['car', 'Carries', l => l.car, 'rush_att'],
+  ['rry', 'Rush+Rec Yds', l => l.ryd + l.cyd, 'rush_rec_yds'], ['pyd', 'Pass Yds', l => l.pyd, 'pass_yds'], ['ptd', 'Pass TDs', l => l.ptd, 'pass_td'], ['cmp', 'Completions', l => l.cmp, 'pass_cmp'],
+  ['att', 'Pass Attempts', l => l.att, 'pass_att'], ['int', 'Interceptions', l => l.int, 'pass_int'], ['pry', 'Pass+Rush Yds', l => l.pyd + l.ryd, null], ['atd', 'Anytime TD', l => (l.rtd || 0) + (l.ctd || 0) > 0 ? 1 : 0, 'anytime_td']];
+const tsSp = () => (tsF().sp === 'NFL' ? 'NFL' : 'NBA');
+const TS_MK_ = () => TS_MKS[tsSp()];
+const tsMk = k => TS_MK_().find(m => m[0] === k) || TS_MK_()[0];
+const tsBin = k => k === 'dd' || k === 'td' || k === 'atd';
+// box-score value of a market for an opposing player line (for defense ranks); NBA markets the box doesn't carry fall back to points
+const tsBoxVal = (k, l) => { const m = tsMk(k); if (tsSp() === 'NFL') return m[2](l); return ['to', 'fta', 'fga', 'tpa'].includes(k) ? l.pts : m[2]({ ...l, to: 0, fta: 0, fga: 0, tpa: 0 }); };
+// NBA seasons "26/27"; NFL seasons by start year "2026"
+const tsSeasonOf = d => { const x = new Date(d);
+  if (tsSp() === 'NFL') return String(x.getMonth() >= 6 ? x.getFullYear() : x.getFullYear() - 1);
+  const y = x.getMonth() >= 8 ? x.getFullYear() : x.getFullYear() - 1; return `${String(y % 100).padStart(2, '0')}/${String((y + 1) % 100).padStart(2, '0')}`; };
 const tsCurSeason = () => tsSeasonOf(new Date());
-const tsF = () => (STORE.ts ||= { game: '', pid: '', mk: 'pts', side: 'O', line: null, ft: 'sug', mode: 'avg', f: {} });
+const tsF = () => (STORE.ts ||= { sp: 'NBA', game: '', pid: '', mk: 'pts', side: 'O', line: null, ft: 'sug', mode: 'avg', f: {} });
+// workload used for "comparable" games: NBA minutes; NFL pass attempts / carries / targets / touches for the market
+const tsWk = () => { if (tsSp() === 'NBA') return { f: l => l.min, lab: 'min', short: 'm' }; const m = tsMk(tsF().mk), V = AN_SP.NFL.vol(m[3] || (m[0] === 'pry' ? 'pass_yds' : m[0] === 'tgt' ? 'rec' : 'rush_rec_yds'));
+  return { f: V.f, lab: V.lab, short: { 'pass att': ' att', carries: ' car', targets: ' tgt', touches: ' tch' }[V.lab] || '' }; };
 function tsLine(g) {
   const f = k => statFrom(g.names, g.stats, k) ?? 0;
-  return { date: g.date, opp: g.opp, oppId: g.oppId, home: g.home, res: String(g.res || '').charAt(0).toUpperCase(), season: tsSeasonOf(g.date),
+  const head = { date: g.date, opp: g.opp, oppId: g.oppId, home: g.home, res: String(g.res || '').charAt(0).toUpperCase(), season: tsSeasonOf(g.date) };
+  if (tsSp() === 'NFL') { const l = { ...head, ...AN_SP.NFL.log(g) }; l.played = AN_SP.NFL.played(l); return l; }
+  return { ...head, played: f(['minutes']) > 0,
     min: f(['minutes']), pts: f(['points']), reb: f(['totalRebounds', 'rebounds']), ast: f(['assists']), tpm: f(['threePointFieldGoalsMade']), tpa: f(['threePointFieldGoalsAttempted']),
     fgm: f(['fieldGoalsMade']), fga: f(['fieldGoalsAttempted']), fta: f(['freeThrowsAttempted']), blk: f(['blocks']), stl: f(['steals']), to: f(['turnovers']), pf: f(['fouls']) };
 }
 // every game in the last 3 seasons with rest days
 function tsGames(pid) {
-  const seen = new Set(), all = [];
-  for (const g of [...(REG.logs[`NBA:${pid}`]?.games || []), ...(AN.h2h[`NBA:${pid}`] || [])]) { const k = g.date + g.oppId; if (seen.has(k) || !g.date) continue; seen.add(k); const l = tsLine(g); if (l.min > 0) all.push(l); }
+  const seen = new Set(), all = [], sp = tsSp(), W = tsWk();
+  for (const g of [...(REG.logs[`${sp}:${pid}`]?.games || []), ...(AN.h2h[`${sp}:${pid}`] || [])]) { const k = g.date + g.oppId; if (seen.has(k) || !g.date) continue; seen.add(k); const l = tsLine(g); if (l.played) { l.wk = W.f(l) || 0; all.push(l); } }
   all.sort((a, b) => String(b.date).localeCompare(String(a.date)));
   for (let i = 0; i < all.length; i++) { const nx = all[i + 1]; all[i].rest = nx ? Math.round((new Date(all[i].date) - new Date(nx.date)) / 864e5) - 1 : null; }
   return all;
 }
 // this season's opponent ranks (1 = allows the fewest) from every team's box scores
 function tsRanks(k, pos) {
-  const rows = anTeams('NBA').map(tid => { const gs = anGames('NBA', tid); if (gs.length < 3) return null;
+  const sp = tsSp(), sum = (gs, key) => anAvg(gs.map(gm => gm.against.reduce((a, l) => a + (l[key] || 0), 0)));
+  const rows = anTeams(sp).map(tid => { const gs = anGames(sp, tid); if (gs.length < 3) return null;
     const per = f => anAvg(gs.map(gm => gm.against.filter(f).reduce((a, l) => a + tsBoxVal(k, l), 0)));
-    return { tid, dvp: pos ? per(l => l.pos === pos) : per(() => true), pts: anAvg(gs.map(gm => gm.against.reduce((a, l) => a + l.pts, 0))), pace: anAvg(gs.map(g => g.total)), tpm: anAvg(gs.map(gm => gm.against.reduce((a, l) => a + l.tpm, 0))), reb: anAvg(gs.map(gm => gm.against.reduce((a, l) => a + l.reb, 0))) };
+    const o = { tid, dvp: pos ? per(l => l.pos === pos) : per(() => true), pts: anAvg(gs.map(g => g.pa)), pace: anAvg(gs.map(g => g.total)) };
+    if (sp === 'NFL') { o.pyd = sum(gs, 'pyd'); o.ryd = sum(gs, 'ryd'); } else { o.tpm = sum(gs, 'tpm'); o.reb = sum(gs, 'reb'); }
+    return o;
   }).filter(Boolean);
   const out = {};
-  for (const key of ['dvp', 'pts', 'pace', 'tpm', 'reb']) { const xs = rows.map(r => r[key]).sort((a, b) => a - b); out[key] = Object.fromEntries(rows.map(r => [r.tid, { r: xs.filter(x => x < r[key] - 1e-9).length + 1, v: r[key], of: rows.length }])); }
+  for (const [key] of tsRK()) { const xs = rows.map(r => r[key]).sort((a, b) => a - b); out[key] = Object.fromEntries(rows.map(r => [r.tid, { r: xs.filter(x => x < r[key] - 1e-9).length + 1, v: r[key], of: rows.length }])); }
   return out;
 }
-const TS_RK = [['dvp', 'Def vs Position'], ['pts', 'Opp Pts Allowed'], ['pace', 'Opp Pace'], ['tpm', 'Opp 3PM Allowed'], ['reb', 'Opp Reb Allowed']];
+const tsRK = () => tsSp() === 'NFL' ? [['dvp', 'Def vs Position'], ['pts', 'Opp Pts Allowed'], ['pace', 'Opp Game Total'], ['pyd', 'Opp Pass Yds Allowed'], ['ryd', 'Opp Rush Yds Allowed']]
+  : [['dvp', 'Def vs Position'], ['pts', 'Opp Pts Allowed'], ['pace', 'Opp Pace'], ['tpm', 'Opp 3PM Allowed'], ['reb', 'Opp Reb Allowed']];
+const tsStatMins = () => tsSp() === 'NFL' ? [['minAtt', 'att', 'Pass att'], ['minCar', 'car', 'Carries'], ['minTgt', 'tgt', 'Targets'], ['minRec', 'rec', 'Receptions']] : [['minMin', 'min', 'Min'], ['minFga', 'fga', 'FGA'], ['min3pa', 'tpa', '3PA'], ['minFta', 'fta', 'FTA']];
 function tsFilter(G, X) {
   const f = tsF().f, cur = tsCurSeason(), seasons = f.seasons?.length ? f.seasons : [cur];
   let gs = G.filter(g => seasons.includes(g.season));
   if (f.h2h) gs = gs.filter(g => g.oppId === X.oppId);
   if (f.home) gs = gs.filter(g => f.home === 'home' ? g.home === true : g.home === false);
   if (f.res) gs = gs.filter(g => g.res === f.res);
-  if (f.rest !== undefined && f.rest !== null && f.rest !== '') gs = gs.filter(g => g.rest !== null && (f.rest === '2' ? g.rest >= 2 : String(g.rest) === f.rest));
-  if (f.minutes && X.avgMin) gs = gs.filter(g => g.min >= X.avgMin - 4);
-  for (const [k, key] of [['minMin', 'min'], ['minFga', 'fga'], ['min3pa', 'tpa'], ['minFta', 'fta']]) if (f[k] > 0) gs = gs.filter(g => g[key] >= f[k]);
-  for (const [key] of TS_RK) if (f['rk_' + key] && X.ranks?.[key]?.[X.oppId]) { const me = X.ranks[key][X.oppId].r; gs = gs.filter(g => { const o = X.ranks[key][g.oppId]; return o && Math.abs(o.r - me) <= 5; }); }
+  if (f.rest !== undefined && f.rest !== null && f.rest !== '') gs = gs.filter(g => g.rest !== null && tsRestOk(g.rest, f.rest));
+  if (f.minutes && X.avgWk) gs = gs.filter(g => g.wk >= (tsSp() === 'NFL' ? 0.75 * X.avgWk : X.avgWk - 4));
+  for (const [k, key] of tsStatMins()) if (f[k] > 0) gs = gs.filter(g => g[key] >= f[k]);
+  for (const [key] of tsRK()) if (f['rk_' + key] && X.ranks?.[key]?.[X.oppId]) { const me = X.ranks[key][X.oppId].r; gs = gs.filter(g => { const o = X.ranks[key][g.oppId]; return o && Math.abs(o.r - me) <= 5; }); }
   const n = f.sample === 'max' || !f.sample ? gs.length : +f.sample;
   return gs.slice(0, n);
 }
+// rest buckets — NBA: back-to-back / 1 day / 2+; NFL: short week (≤4 days off) / normal / extra rest (after a bye)
+const tsRestOk = (r, b) => b === '0' ? r === 0 : b === '1' ? r === 1 : b === '2' ? r >= 2 : b === 's' ? r <= 4 : b === 'n' ? r >= 5 && r <= 7 : b === 'l' ? r >= 8 : true;
 const tsMed = xs => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 function tsStats(vals, line, side, bin) {
   const hit = v => bin ? v >= 1 : side === 'U' ? v < line : v > line, g = vals.filter(v => bin || v !== line);
@@ -5381,11 +5403,12 @@ function tsStats(vals, line, side, bin) {
   return { n: vals.length, h: g.filter(hit).length, gn: g.length, avg, med, diff: bin || avg === null ? null : avg - line, diffP: bin || avg === null || !line ? null : (avg - line) / line };
 }
 function tsCtx() {
-  const S = tsF(), evs = [...REG.events.values()].filter(e => e.sport === 'NBA' && e.state === 'pre').sort((a, b) => new Date(a.start) - new Date(b.start));
+  const S = tsF(), sp = tsSp(), evs = [...REG.events.values()].filter(e => e.sport === sp && e.state === 'pre').sort((a, b) => new Date(a.start) - new Date(b.start));
   const ev = evs.find(e => e.eventId === S.game) || evs[0]; if (!ev) return { evs };
-  const players = [...REG.players.values()].filter(p => p.sport === 'NBA' && (String(p.teamId) === String(ev.homeTeamId) || String(p.teamId) === String(ev.awayTeamId)));
-  const sim = APP.simCache.get(`NBA:${ev.eventId}`), m = tsMk(S.mk);
-  const rowOf = pid => sim?.players?.find(r => String(r.playerId) === String(pid) && r.market === (m[3] || 'nba_pts'));
+  const players = [...REG.players.values()].filter(p => p.sport === sp && (String(p.teamId) === String(ev.homeTeamId) || String(p.teamId) === String(ev.awayTeamId)) && (sp !== 'NFL' || ['QB', 'RB', 'WR', 'TE'].includes(p.group)));
+  const sim = APP.simCache.get(`${sp}:${ev.eventId}`), m = tsMk(S.mk);
+  const fallbackMkt = sp === 'NFL' ? ({ tgt: 'rec', pry: 'pass_yds' }[m[0]] || 'rec_yds') : 'nba_pts';
+  const rowOf = pid => sim?.players?.find(r => String(r.playerId) === String(pid) && r.market === (m[3] || fallbackMkt));
   players.sort((a, b) => (rowOf(b.playerId)?.mean ?? -1) - (rowOf(a.playerId)?.mean ?? -1) || a.playerName.localeCompare(b.playerName));
   const P = players.find(p => p.playerId === S.pid) || players[0];
   if (!P) return { evs, ev, players };
@@ -5404,11 +5427,11 @@ function tsChart(gs, line, side, bin) {
     <defs><linearGradient id="tsGg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#047857"/></linearGradient><linearGradient id="tsGr" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#9f1239"/></linearGradient></defs>
     ${grid}<line x1="24" x2="${W - 6}" y1="${base}" y2="${base}" stroke="var(--muted)" stroke-width=".5"/>
     ${games.map((g, i) => { const cx = 30 + i * ((W - 40) / n) + (W - 40) / n / 2, v = g.v, col = !bin && v === line ? 'var(--muted)' : hit(v) ? 'url(#tsGg)' : 'url(#tsGr)', hh = bin ? (v ? base - top : 4) : Math.max(1, base - y(v));
-      return `<g><title>${esc(new Date(g.date).toLocaleDateString())} ${g.home ? 'vs' : '@'} ${esc(g.opp)} · ${Math.round(g.min)} min · ${bin ? (v ? 'Yes' : 'No') : fmtN(v)}</title><rect x="${(cx - bw / 2).toFixed(1)}" y="${(base - hh).toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="4" fill="${col}"/>
+      return `<g><title>${esc(new Date(g.date).toLocaleDateString())} ${g.home ? 'vs' : '@'} ${esc(g.opp)} · ${Math.round(g.wk)} ${esc(tsWk().lab)} · ${bin ? (v ? 'Yes' : 'No') : fmtN(v)}</title><rect x="${(cx - bw / 2).toFixed(1)}" y="${(base - hh).toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="4" fill="${col}"/>
       <text x="${cx.toFixed(1)}" y="${(base - hh - 4).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="currentColor">${bin ? (v ? 'Y' : 'N') : fmtN(v)}</text>
       <text x="${cx.toFixed(1)}" y="${base + 13}" text-anchor="middle" font-size="9" fill="var(--muted)">${g.home ? '' : '@'}${esc(String(g.opp).slice(0, 4))}</text>
       <text x="${cx.toFixed(1)}" y="${base + 25}" text-anchor="middle" font-size="8" fill="var(--muted)">${esc(new Date(g.date).toLocaleDateString([], { month: 'numeric', day: 'numeric' }))}</text>
-      <text x="${cx.toFixed(1)}" y="${base + 36}" text-anchor="middle" font-size="8" fill="var(--muted)">${Math.round(g.min)}m</text></g>`; }).join('')}
+      <text x="${cx.toFixed(1)}" y="${base + 36}" text-anchor="middle" font-size="8" fill="var(--muted)">${Math.round(g.wk)}${esc(tsWk().short)}</text></g>`; }).join('')}
     ${bin ? '' : `<line x1="24" x2="${W - 6}" y1="${y(line).toFixed(1)}" y2="${y(line).toFixed(1)}" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="2" y="${(y(line) + 3).toFixed(1)}" font-size="10" fill="var(--amber)">${fmtN(line)}</text>
     <line x1="24" x2="${W - 6}" y1="${y(avg).toFixed(1)}" y2="${y(avg).toFixed(1)}" stroke="var(--sky)" stroke-width="1.2" stroke-dasharray="2 3"/>`}
   </svg></div>`;
@@ -5418,21 +5441,23 @@ function tsRankTag(rk, side) { if (!rk) return ''; const s = rk.r / rk.of, good 
 function renderTesting() {
   const S = tsF(), box = $('tsBody'); if (!box) return;
   if (box.clientWidth) TS.cw = box.clientWidth;   // draw the chart at the real width (phones)
-  $('tsMkts').innerHTML = TS_MK.map(m => `<button type="button" class="ts-chip ${S.mk === m[0] ? 'on' : ''}" data-tsmk="${m[0]}">${m[1]}</button>`).join('');
+  $('tsSport').querySelectorAll('[data-tssp]').forEach(b => b.classList.toggle('on', b.dataset.tssp === tsSp()));
+  if (!TS_MK_().some(m => m[0] === S.mk)) S.mk = TS_MK_()[0][0];
+  $('tsMkts').innerHTML = TS_MK_().map(m => `<button type="button" class="ts-chip ${S.mk === m[0] ? 'on' : ''}" data-tsmk="${m[0]}">${m[1]}</button>`).join('');
   const X = tsCtx();
-  $('tsGames').innerHTML = (X.evs || []).map(e => `<button type="button" class="ts-game ${X.ev?.eventId === e.eventId ? 'on' : ''}" data-tsgame="${esc(e.eventId)}"><b>${esc(e.awayAbbr)} <span class="muted">@</span> ${esc(e.homeAbbr)}</b><span>${esc(new Date(e.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</span></button>`).join('') || '<span class="xs muted">No upcoming NBA games loaded</span>';
+  $('tsGames').innerHTML = (X.evs || []).map(e => `<button type="button" class="ts-game ${X.ev?.eventId === e.eventId ? 'on' : ''}" data-tsgame="${esc(e.eventId)}"><b>${esc(e.awayAbbr)} <span class="muted">@</span> ${esc(e.homeAbbr)}</b><span>${esc(new Date(e.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</span></button>`).join('') || `<span class="xs muted">No upcoming ${tsSp()} games loaded</span>`;
   $('tsGames').querySelector('.on')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   $('tsPlayer').innerHTML = (X.players || []).map(p => `<option value="${esc(p.playerId)}" ${X.P?.playerId === p.playerId ? 'selected' : ''}>${esc(p.playerName)} · ${esc(String(p.teamId) === String(X.ev.homeTeamId) ? X.ev.homeAbbr : X.ev.awayAbbr)}${p.group ? ' · ' + esc(p.group) : ''}</option>`).join('');
   $('tsStatus').innerHTML = TS.busy || TS.msg ? `<span class="${TS.busy ? 'muted' : 'amber'}">${esc(TS.msg)}</span>` : '';
-  if (!X.P) { box.innerHTML = TS.busy ? '' : '<div class="xs muted">Pick a game. If the list is empty, there are no upcoming NBA games loaded yet.</div>'; return; }
-  const k = `NBA:${X.P.playerId}`, G = tsGames(X.P.playerId);
+  if (!X.P) { box.innerHTML = TS.busy ? '' : `<div class="xs muted">Pick a game. If the list is empty, there are no upcoming ${tsSp()} games loaded yet.</div>`; return; }
+  const SP = tsSp(), C = AN_SP[SP], WK = tsWk(), k = `${SP}:${X.P.playerId}`, G = tsGames(X.P.playerId);
   if (!REG.logs[k] || !AN.h2h[k]) { box.innerHTML = '<div class="xs muted">Loading his game logs…</div>'; tsLoadPlayer(X.P.playerId); return; }
   const m = X.m, bin = tsBin(S.mk), cur = tsCurSeason();
   for (const g of G) g.v = m[2](g);
   const curG = G.filter(g => g.season === cur);
-  X.avgMin = anAvg(curG.slice(0, 10).map(g => g.min)) ?? anAvg(G.slice(0, 10).map(g => g.min));
-  const pos = ['G', 'F', 'C'].includes(X.P.group) ? X.P.group : null;
-  X.ranks = TS.leagueReady ? tsRanks(S.mk, pos) : null;
+  X.avgWk = anAvg(curG.slice(0, 10).map(g => g.wk)) ?? anAvg(G.slice(0, 10).map(g => g.wk));
+  const pos = C.pos[X.P.group] ? X.P.group : null, posName = pos ? C.pos[pos] : null;
+  X.ranks = TS.ready?.[SP] ? tsRanks(S.mk, pos) : null;
   // line: the books' line (Load lines), else what you typed, else the season average rounded to .5
   const bookLine = X.book?.line ?? null, seasonAvg = anAvg((curG.length ? curG : G).map(g => g.v));
   const defLine = bookLine ?? (seasonAvg === null ? 0.5 : Math.max(0.5, Math.floor(seasonAvg) + 0.5));
@@ -5447,41 +5472,41 @@ function renderTesting() {
   const sug = `<div class="row" style="flex-wrap:wrap;gap:.35rem">
       ${tsChip('season:cur', `${cur} only`, seasons.length === 1 && seasons[0] === cur)}${tsChip('season:l3', 'L3 Seasons', seasons.length >= Math.min(3, allSeasons.length) && allSeasons.length > 1)}
       ${['5', '10', '20'].map(n => tsChip('sample:' + n, 'L' + n, f.sample === n)).join('')}${tsChip('sample:max', `Max (${G.filter(g => seasons.includes(g.season)).length})`, !f.sample || f.sample === 'max')}
-      ${tsChip('minutes', `Minutes ${X.avgMin ? Math.round(X.avgMin - 4) + '+' : ''}`, f.minutes)}${tsChip('h2h', `H2H vs ${esc(X.oppAbbr)}`, f.h2h)}
-      ${TS_RK.map(([key, lab]) => tsChip('rk_' + key, key === 'dvp' ? `Def vs Position (${esc(m[1])})` : lab, f['rk_' + key], X.ranks ? tsRankTag(rk(key), side) : '')).join('')}
+      ${tsChip('minutes', SP === 'NFL' ? `${WK.lab[0].toUpperCase() + WK.lab.slice(1)} ${X.avgWk ? Math.round(0.75 * X.avgWk) + '+' : ''}` : `Minutes ${X.avgWk ? Math.round(X.avgWk - 4) + '+' : ''}`, f.minutes)}${tsChip('h2h', `H2H vs ${esc(X.oppAbbr)}`, f.h2h)}
+      ${tsRK().map(([key, lab]) => tsChip('rk_' + key, key === 'dvp' ? `Def vs Position (${esc(m[1])})` : lab, f['rk_' + key], X.ranks ? tsRankTag(rk(key), side) : '')).join('')}
     </div>${X.ranks ? '' : '<div class="xs muted">Opponent ranks appear once this season\'s box scores finish loading.</div>'}`;
   const num = (key, lab) => `<label class="xs">${lab} ≥ <input type="number" min="0" step="1" data-tsnum="${key}" value="${f[key] ?? ''}" style="width:4.2rem"></label>`;
   const all = `<div class="stack" style="gap:.25rem">
       <details ${tsAcc('season')}><summary>Season &amp; Games</summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${allSeasons.map(s => tsChip('seasonT:' + s, s, seasons.includes(s))).join('')}<span class="muted xs">·</span>${['5', '10', '20'].map(n => tsChip('sample:' + n, 'Last ' + n, f.sample === n)).join('')}${tsChip('sample:max', 'All', !f.sample || f.sample === 'max')}${tsChip('h2h', 'Only vs ' + esc(X.oppAbbr), f.h2h)}</div></details>
-      <details ${tsAcc('splits')}><summary>Splits</summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${tsChip('home:home', 'Home', f.home === 'home')}${tsChip('home:away', 'Away', f.home === 'away')}<span class="muted xs">·</span>${tsChip('res:W', 'Team won', f.res === 'W')}${tsChip('res:L', 'Team lost', f.res === 'L')}<span class="muted xs">·</span>${tsChip('rest:0', 'Back-to-back', f.rest === '0')}${tsChip('rest:1', '1 day rest', f.rest === '1')}${tsChip('rest:2', '2+ days rest', f.rest === '2')}</div></details>
-      <details ${tsAcc('opp')}><summary>Opponent Rankings <span class="muted">(games vs teams ranked within ±5 of ${esc(X.oppAbbr)}; ranks are this season's, 1 = allows fewest)</span></summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${TS_RK.map(([key, lab]) => tsChip('rk_' + key, key === 'dvp' ? `Def vs ${pos ? AN_SP.NBA.pos[pos] + 's' : 'position'} (${esc(m[1])})` : lab, f['rk_' + key], X.ranks ? tsRankTag(rk(key), side) : '')).join('')}</div></details>
-      <details ${tsAcc('stats')}><summary>Player Stats</summary><div class="row" style="flex-wrap:wrap;gap:.6rem;align-items:center">${tsChip('minutes', 'Minutes near his average', f.minutes)}${num('minMin', 'Min')}${num('minFga', 'FGA')}${num('min3pa', '3PA')}${num('minFta', 'FTA')}</div></details>
+      <details ${tsAcc('splits')}><summary>Splits</summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${tsChip('home:home', 'Home', f.home === 'home')}${tsChip('home:away', 'Away', f.home === 'away')}<span class="muted xs">·</span>${tsChip('res:W', 'Team won', f.res === 'W')}${tsChip('res:L', 'Team lost', f.res === 'L')}<span class="muted xs">·</span>${SP === 'NFL' ? tsChip('rest:s', 'Short week', f.rest === 's') + tsChip('rest:n', 'Normal week', f.rest === 'n') + tsChip('rest:l', 'After bye / extra rest', f.rest === 'l') : tsChip('rest:0', 'Back-to-back', f.rest === '0') + tsChip('rest:1', '1 day rest', f.rest === '1') + tsChip('rest:2', '2+ days rest', f.rest === '2')}</div></details>
+      <details ${tsAcc('opp')}><summary>Opponent Rankings <span class="muted">(games vs teams ranked within ±5 of ${esc(X.oppAbbr)}; ranks are this season's, 1 = allows fewest)</span></summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${tsRK().map(([key, lab]) => tsChip('rk_' + key, key === 'dvp' ? `Def vs ${posName ? posName + 's' : 'position'} (${esc(m[1])})` : lab, f['rk_' + key], X.ranks ? tsRankTag(rk(key), side) : '')).join('')}</div></details>
+      <details ${tsAcc('stats')}><summary>Player Stats</summary><div class="row" style="flex-wrap:wrap;gap:.6rem;align-items:center">${tsChip('minutes', SP === 'NFL' ? `${esc(WK.lab)} near his average` : 'Minutes near his average', f.minutes)}${tsStatMins().map(([key, , lab]) => num(key, lab)).join('')}</div></details>
     </div>`;
   const nActive = Object.entries(f).filter(([k2, v]) => v && !(k2 === 'seasons' && v.length === 1 && v[0] === cur) && !(k2 === 'sample' && v === 'max')).length;
   // splits table (same seasons as the filter)
   const base = G.filter(g => seasons.includes(g.season));
   const splitRow = (lab, xs) => { const s2 = tsStats(xs.map(g => g.v), line, side, bin); return `<tr><td>${lab}</td><td class="mono">${s2.n}</td><td class="mono">${s2.n ? (bin ? pct(s2.avg) : anF(S.mode === 'med' ? s2.med : s2.avg)) : '—'}</td><td>${s2.gn ? (q => `<div class="ts-bar"><div style="width:${Math.round(q * 100)}%;background:var(--${q >= 0.6 ? 'green' : q <= 0.4 ? 'rose' : 'amber'})"></div></div><span class="mono ${q >= 0.6 ? 'green' : q <= 0.4 ? 'rose' : 'amber'}">${Math.round(q * 100)}%</span> <span class="muted mono">${s2.h}/${s2.gn}</span>`)(s2.h / s2.gn) : '<span class="muted">—</span>'}</td></tr>`; };
-  const tierOf = g => { const o = X.ranks?.dvp?.[g.oppId]; return o ? (o.r <= 10 ? 'top' : o.r > o.of - 10 ? 'bot' : 'mid') : null; };
+  const tierOf = g => { const o = X.ranks?.dvp?.[g.oppId]; return o ? (o.r <= 10 ? 'top' : o.r > o.of - 10 ? 'bot' : 'mid') : null; };   // 10 of 30 / 32
   const splits = `<table class="xs ts-tbl"><thead><tr><th>Split</th><th>G</th><th>${S.mode === 'med' ? 'Med' : 'Avg'}</th><th>Hit</th></tr></thead><tbody>
     ${splitRow('All', base)}${splitRow('Last 5', base.slice(0, 5))}${splitRow('Last 10', base.slice(0, 10))}${splitRow('Home', base.filter(g => g.home === true))}${splitRow('Away', base.filter(g => g.home === false))}
-    ${splitRow('Team won', base.filter(g => g.res === 'W'))}${splitRow('Team lost', base.filter(g => g.res === 'L'))}${splitRow('Back-to-back', base.filter(g => g.rest === 0))}${splitRow('2+ days rest', base.filter(g => g.rest >= 2))}
+    ${splitRow('Team won', base.filter(g => g.res === 'W'))}${splitRow('Team lost', base.filter(g => g.res === 'L'))}${SP === 'NFL' ? splitRow('Short week', base.filter(g => g.rest !== null && g.rest <= 4)) + splitRow('After bye / extra rest', base.filter(g => g.rest >= 8)) : splitRow('Back-to-back', base.filter(g => g.rest === 0)) + splitRow('2+ days rest', base.filter(g => g.rest >= 2))}
     ${X.ranks ? splitRow('vs top-10 D (this stat/pos)', base.filter(g => tierOf(g) === 'top')) + splitRow('vs bottom-10 D', base.filter(g => tierOf(g) === 'bot')) : ''}${splitRow('vs ' + esc(X.oppAbbr), base.filter(g => g.oppId === X.oppId))}</tbody></table>`;
   // similar players vs tonight's opponent (from the Analyze engine)
   let sim = '<div class="xs muted">Loading this season\'s box scores…</div>', matchup = '';
-  if (TS.leagueReady && m[3]) {
-    const A = anCompute({ sport: 'NBA', player: X.P.playerName, pid: X.P.playerId, mm: m[3], side, line, start: X.ev.start });
+  if (TS.ready?.[SP] && m[3]) {
+    const A = anCompute({ sport: SP, player: X.P.playerName, pid: X.P.playerId, mm: m[3], side, line, start: X.ev.start });
     if (A.err) sim = `<div class="xs amber">${esc(A.err)}</div>`;
     else {
       const rows = A.all.map(l => ({ ...l, diff: bin ? null : l.v - line, ok: bin ? l.v >= 1 : l.v === line ? null : side === 'U' ? l.v < line : l.v > line }));
       const graded = rows.filter(r => r.ok !== null), per = 10, pages = Math.max(1, Math.ceil(rows.length / per)); TS.page = Math.min(TS.page, pages - 1);
       const ad = bin ? null : anAvg(rows.map(r => r.diff));
       sim = `<div class="grid" style="grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:.5rem">${tile('AVG DIFF', ad === null ? '—' : (ad > 0 ? '+' : '') + anF(ad), ad === null ? 'muted' : (side === 'U' ? ad < 0 : ad > 0) ? 'green' : 'rose')}${tile('AVG DIFF %', ad === null || !line ? '—' : (ad > 0 ? '+' : '') + anF(ad / line * 100, 0) + '%', ad === null ? 'muted' : (side === 'U' ? ad < 0 : ad > 0) ? 'green' : 'rose')}${tile('HIT RATE', graded.length ? `${Math.round(graded.filter(r => r.ok).length / graded.length * 100)}%` : '—', graded.length ? (graded.filter(r => r.ok).length / graded.length >= 0.6 ? 'green' : graded.filter(r => r.ok).length / graded.length <= 0.4 ? 'rose' : 'amber') : 'muted')}</div>
-        <div class="xs muted" style="margin-bottom:.3rem">${esc(A.pn[0].toUpperCase() + A.pn.slice(1))} who played ${A.qualVol}+ min against ${esc(X.oppAbbr)} this season (${rows.length} player-games)</div>
+        <div class="xs muted" style="margin-bottom:.3rem">${esc(A.pn[0].toUpperCase() + A.pn.slice(1))} with ${A.qualVol}+ ${esc(A.V.lab)} against ${esc(X.oppAbbr)} this season (${rows.length} player-games)</div>
         ${rows.length ? `<div class="table-wrap"><table class="xs ts-tbl"><thead><tr><th>Date</th><th>Team</th><th>Player</th><th>Line</th><th>Result</th><th>Diff %</th></tr></thead><tbody>${rows.slice(TS.page * per, TS.page * per + per).map(r => `<tr><td class="mono">${esc(new Date(r.date).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</td><td>${esc(r.teamAbbr)}</td><td>${esc(r.name)}</td><td class="mono">${bin ? 'Yes' : fmtN(line)}</td><td><span class="ts-res ${r.ok === null ? '' : r.ok ? 'hit' : 'miss'}">${bin ? (r.v ? 'Yes' : 'No') : fmtN(r.v)}</span></td><td class="mono ${r.ok === null ? 'muted' : r.ok ? 'green' : 'rose'}">${bin || !line ? '—' : (r.diff > 0 ? '+' : '') + Math.round(r.diff / line * 100) + '%'}</td></tr>`).join('')}</tbody></table></div>
           <div class="row" style="justify-content:center;gap:.5rem;margin-top:.35rem"><button type="button" class="xs" data-tspage="-1" ${TS.page ? '' : 'disabled'}>‹</button><span class="xs muted">${TS.page + 1} / ${pages}</span><button type="button" class="xs" data-tspage="1" ${TS.page < pages - 1 ? '' : 'disabled'}>›</button></div>` : '<div class="xs muted">Insufficient data</div>'}`;
       matchup = `<details ${tsAcc('matchup')}><summary>🔍 Full matchup analysis vs ${esc(X.oppAbbr)} (defense, position, score)</summary>${anHtml(A).replace(/<button type="button" class="xs" data-olanclose>Close ✕<\/button>/, '')}</details>`;
     }
-  } else if (!m[3]) sim = `<div class="xs muted">Similar-player comparison isn't available for ${esc(m[1])} (box scores don't carry it). Pick Points, Rebounds, Assists, Threes, a combo, Blocks, Steals or Double Double.</div>`;
+  } else if (!m[3]) sim = `<div class="xs muted">Similar-player comparison isn't available for ${esc(m[1])} (box scores don't carry it). Pick one of the other markets.</div>`;
   // quick hit-rate strip (same seasons, before the other filters)
   const strip = [['L5', base.slice(0, 5)], ['L10', base.slice(0, 10)], ['L20', base.slice(0, 20)], [seasons.length > 1 ? 'All' : 'Season', base], ['H2H', G.filter(g => g.oppId === X.oppId)]].map(([lab, xs]) => {
     const q = tsStats(xs.map(g => g.v), line, side, bin), r2 = q.gn ? q.h / q.gn : null;
@@ -5495,10 +5520,10 @@ function renderTesting() {
   const ini = X.P.playerName.split(/\s+/).map(w => w[0]).slice(0, 2).join('');
   box.innerHTML = `<div class="stack" style="gap:.75rem">
     <div class="ts-hero">
-      <div class="ts-head"><span>${esc(ini)}</span><img src="https://a.espncdn.com/i/headshots/nba/players/full/${esc(X.P.playerId)}.png" alt="" loading="lazy" onerror="this.remove()"></div>
+      <div class="ts-head"><span>${esc(ini)}</span><img src="https://a.espncdn.com/i/headshots/${SP === 'NFL' ? 'nfl' : 'nba'}/players/full/${esc(X.P.playerId)}.png" alt="" loading="lazy" onerror="this.remove()"></div>
       <div class="ts-who">
         <div class="ts-name">${esc(X.P.playerName)}</div>
-        <div class="xs muted">${esc(X.teamAbbr)}${pos ? ' · ' + AN_SP.NBA.pos[pos][0].toUpperCase() + AN_SP.NBA.pos[pos].slice(1) : ''} · ${X.home ? 'vs' : '@'} ${esc(X.oppAbbr)} · ${esc(new Date(X.ev.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</div>
+        <div class="xs muted">${esc(X.teamAbbr)}${posName ? ' · ' + posName[0].toUpperCase() + posName.slice(1) : ''} · ${X.home ? 'vs' : '@'} ${esc(X.oppAbbr)} · ${esc(new Date(X.ev.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</div>
         <div class="row" style="flex-wrap:wrap;gap:.3rem;margin-top:.35rem">${pill(esc(m[1]), bin ? 'Yes' : '')}${bookLine !== null ? pill('Book line', fmtN(bookLine)) : '<span class="ts-pill muted">No book line · press Load lines</span>'}${X.row?.mean > 0 && !bin ? pill('Model', anF(X.row.mean), 'sky') : ''}${seasonAvg !== null ? pill('Season ' + (bin ? 'rate' : 'avg'), bin ? pct(seasonAvg) : anF(seasonAvg)) : ''}</div>
       </div>
       ${bin ? '' : `<div class="ts-ctl"><span class="seg ts-seg"><button type="button" class="${side === 'O' ? 'on' : ''}" data-tsside="O">Over</button><button type="button" class="${side === 'U' ? 'on' : ''}" data-tsside="U">Under</button></span>
@@ -5507,7 +5532,7 @@ function renderTesting() {
     </div>
     <div class="ts-sum">
       <div class="ts-ring">${ring}<div class="xs muted" style="text-align:center">${bin ? esc(m[1]) : `${side === 'U' ? 'Under' : 'Over'} ${fmtN(line)}`}<br>${st.n} game${st.n === 1 ? '' : 's'}${nActive ? ` · <span class="amber">${nActive} filter${nActive === 1 ? '' : 's'}</span>` : ''}</div></div>
-      <div class="ts-stats">${stat(bin ? 'Rate' : S.mode === 'med' ? 'Median' : 'Average', mid === null ? '—' : bin ? pct(mid) : anF(mid))}${bin ? stat('Hits', `${st.h}/${st.gn}`) : stat('Avg diff', st.diff === null ? '—' : (st.diff > 0 ? '+' : '') + anF(st.diff), dcls(st.diff)) + stat('Avg diff %', st.diffP === null ? '—' : (st.diffP > 0 ? '+' : '') + anF(st.diffP * 100, 0) + '%', dcls(st.diffP))}${stat('Avg minutes', anF(anAvg(gs.map(g => g.min))))}</div>
+      <div class="ts-stats">${stat(bin ? 'Rate' : S.mode === 'med' ? 'Median' : 'Average', mid === null ? '—' : bin ? pct(mid) : anF(mid))}${bin ? stat('Hits', `${st.h}/${st.gn}`) : stat('Avg diff', st.diff === null ? '—' : (st.diff > 0 ? '+' : '') + anF(st.diff), dcls(st.diff)) + stat('Avg diff %', st.diffP === null ? '—' : (st.diffP > 0 ? '+' : '') + anF(st.diffP * 100, 0) + '%', dcls(st.diffP))}${stat('Avg ' + WK.lab, anF(anAvg(gs.map(g => g.wk))))}</div>
     </div>
     <div class="ts-strip">${strip}</div>
     <div class="ts-panel"><div class="row between" style="flex-wrap:wrap;gap:.4rem;margin-bottom:.4rem"><div class="ts-h">Game log <span class="muted">· ${st.n} game${st.n === 1 ? '' : 's'}</span></div><div class="ts-legend"><i style="background:var(--green)"></i>hit <i style="background:var(--rose)"></i>miss ${bin ? '' : '<i class="dash" style="border-color:var(--amber)"></i>line <i class="dash dot" style="border-color:var(--sky)"></i>avg'}</div></div>${tsChart(gs, line, side, bin)}</div>
@@ -5526,27 +5551,31 @@ function renderTesting() {
 }
 async function tsLoadPlayer(pid) {
   if (TS.loadingPid === pid) return; TS.loadingPid = pid;
-  try { await anEnsureLogs('NBA', pid); } catch {}
+  try { await anEnsureLogs(tsSp(), pid); } catch {}
   TS.loadingPid = null; if (APP.view === 'testing') renderTesting();
 }
 async function openTesting() {
   if (TS.busy) return renderTesting();
-  TS.busy = true; TS.msg = 'Loading NBA games and rosters…'; renderTesting();
+  const sp = tsSp();
+  TS.busy = true; TS.msg = `Loading ${sp} games and rosters…`; renderTesting();
   try {
-    if (APP.sport !== 'NBA') { APP.sport = 'NBA'; APP.eventId = null; APP.simCache.clear(); renderChrome(); await syncSport(false, true); }
+    if (APP.sport !== sp) { APP.sport = sp; APP.eventId = null; APP.simCache.clear(); renderChrome(); await syncSport(false, true); }
     await preloadSlate(); refreshAllSims(); renderTesting();
-    if (!TS.leagueReady) { const tick = setInterval(() => { TS.msg = AN.msg || 'Loading this season\'s box scores…'; $('tsStatus').innerHTML = `<span class="muted">${esc(TS.msg)}</span>`; }, 700);
-      try { await anEnsureLeague('NBA'); TS.leagueReady = true; } finally { clearInterval(tick); } }
+    TS.ready ||= {};
+    if (!TS.ready[sp]) { const tick = setInterval(() => { TS.msg = AN.msg || 'Loading this season\'s box scores…'; $('tsStatus').innerHTML = `<span class="muted">${esc(TS.msg)}</span>`; }, 700);
+      try { await anEnsureLeague(sp); TS.ready[sp] = true; } finally { clearInterval(tick); } }
     TS.msg = '';
   } catch (e) { TS.msg = e.message || 'Load failed'; }
   TS.busy = false; renderTesting();
 }
 function tsWire() {
   const S = tsF(), rer = () => { save(); renderTesting(); };
+  $('tsSport').addEventListener('click', e => { const b = e.target.closest('[data-tssp]'); if (!b || b.dataset.tssp === tsSp()) return;
+    S.sp = b.dataset.tssp; S.game = ''; S.pid = ''; S.f = {}; S.line = null; S.mk = TS_MK_()[0][0]; TS.page = 0; save(); openTesting(); });
   $('tsMkts').addEventListener('click', e => { const b = e.target.closest('[data-tsmk]'); if (!b) return; S.mk = b.dataset.tsmk; TS.page = 0; rer(); });
   $('tsGames').addEventListener('click', e => { const b = e.target.closest('[data-tsgame]'); if (!b) return; S.game = b.dataset.tsgame; S.pid = ''; TS.page = 0; rer(); });
   $('tsPlayer').addEventListener('change', e => { S.pid = e.target.value; TS.page = 0; rer(); });
-  $('tsLoadBtn').addEventListener('click', async () => { if (!hasOdds()) { TS.msg = 'Add your Odds API key (Prop outliers) first.'; renderTesting(); return; } TS.msg = 'Loading sportsbook lines…'; TS.busy = true; renderTesting(); try { await autoFillLines('NBA', false); refreshAllSims(); TS.msg = ''; } catch (e) { TS.msg = e.message; } TS.busy = false; renderTesting(); });
+  $('tsLoadBtn').addEventListener('click', async () => { if (!hasOdds()) { TS.msg = 'Add your Odds API key (Prop outliers) first.'; renderTesting(); return; } TS.msg = 'Loading sportsbook lines…'; TS.busy = true; renderTesting(); try { await autoFillLines(tsSp(), false); refreshAllSims(); TS.msg = ''; } catch (e) { TS.msg = e.message; } TS.busy = false; renderTesting(); });
   $('tsBody').addEventListener('click', e => {
     const t = e.target.closest('button'); if (!t) return; const d = t.dataset, f = S.f;
     if (d.tsside) { S.side = d.tsside; rer(); return; }
