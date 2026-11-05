@@ -134,8 +134,42 @@
   details > summary::-webkit-details-marker { display: none; }
   .slot { display: grid; grid-template-columns: 44px 1fr auto auto; gap: .35rem; align-items: center; padding: .3rem; border: 1px solid var(--line); border-radius: .5rem; background: #080d19; }
   .slot select { min-width: 0; width: 100%; }
-  .ts-chip { border-radius: 999px; padding: .3rem .7rem; font-size: .76rem; background: #111827; border-color: var(--line); }
-  .ts-chip.on { background: #1e3a5f; border-color: var(--sky); color: #fff; }
+  .ts-chip { border-radius: 999px; padding: .38rem .8rem; font-size: .78rem; background: #111827; border-color: #1f2937; white-space: nowrap; transition: background .15s, border-color .15s; }
+  .ts-chip:hover { border-color: var(--line-2); } .ts-chip.on { background: rgba(56,189,248,.16); border-color: var(--sky); color: #fff; }
+  .ts-scroll { display: flex; gap: .4rem; overflow-x: auto; scrollbar-width: none; padding-bottom: .15rem; -webkit-overflow-scrolling: touch; } .ts-scroll::-webkit-scrollbar { display: none; }
+  .ts-game { display: flex; flex-direction: column; align-items: flex-start; gap: .1rem; min-width: 7.6rem; padding: .45rem .7rem; border-radius: .7rem; background: #0b1220; border-color: #1f2937; text-align: left; }
+  .ts-game span { font-size: .68rem; color: var(--muted); } .ts-game.on { border-color: var(--green); background: rgba(52,211,153,.08); }
+  .ts-select { width: 100%; max-width: 30rem; padding: .5rem .6rem; font-size: .85rem; }
+  .ts-hero { display: grid; grid-template-columns: auto 1fr auto; gap: .9rem; align-items: center; padding: .9rem; border-radius: 1rem; border: 1px solid var(--line); background: radial-gradient(120% 140% at 0% 0%, rgba(52,211,153,.12), transparent 55%), linear-gradient(180deg, #0f172a, #0b1220); }
+  .ts-head { position: relative; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; background: #1e293b; border: 2px solid rgba(52,211,153,.5); display: grid; place-items: center; }
+  .ts-head span { font-weight: 800; color: var(--muted); } .ts-head img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; transform: scale(1.35); transform-origin: 50% 20%; }
+  .ts-name { font-size: 1.3rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; }
+  .ts-pill { display: inline-flex; gap: .3rem; align-items: center; padding: .18rem .55rem; border-radius: 999px; background: rgba(15,23,42,.9); border: 1px solid #1f2937; font-size: .72rem; } .ts-pill > span { color: var(--muted); }
+  .ts-ctl { display: flex; flex-direction: column; gap: .4rem; align-items: stretch; }
+  .ts-seg button { padding: .42rem .9rem; font-weight: 700; } .ts-seg.sm2 button { padding: .3rem .7rem; font-weight: 600; }
+  .ts-step { display: flex; border: 1px solid var(--line-2); border-radius: .55rem; overflow: hidden; } .ts-step button { border: 0; border-radius: 0; width: 2.2rem; font-size: 1rem; background: #111827; } .ts-step input { border: 0; border-radius: 0; width: 4.6rem; text-align: center; font-weight: 800; font-size: 1rem; background: #0b1220; }
+  .ts-step input { -moz-appearance: textfield; appearance: textfield; padding: .3rem .2rem; } .ts-step input::-webkit-inner-spin-button, .ts-step input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .ts-link { background: transparent; border: 0; color: var(--sky); padding: 0; }
+  .ts-sum { display: grid; grid-template-columns: auto 1fr; gap: .9rem; align-items: center; padding: .8rem .9rem; border-radius: 1rem; border: 1px solid var(--line); background: #0b1220; }
+  .ts-ring { display: flex; flex-direction: column; align-items: center; gap: .15rem; }
+  .ts-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: .5rem; }
+  .ts-stat { padding: .55rem .6rem; border-radius: .7rem; background: #0f172a; border: 1px solid #1f2937; display: flex; flex-direction: column; gap: .15rem; } .ts-stat span { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; } .ts-stat b { font-size: 1.15rem; }
+  .ts-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: .9rem; overflow: hidden; background: #0b1220; }
+  .ts-cell { display: flex; flex-direction: column; align-items: center; padding: .5rem .2rem; gap: .05rem; border-left: 1px solid #1f2937; } .ts-cell:first-child { border-left: 0; }
+  .ts-cell span { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; } .ts-cell b { font-size: 1rem; } .ts-cell i { font-style: normal; font-size: .64rem; color: var(--muted); }
+  .ts-panel { padding: .85rem; border-radius: 1rem; border: 1px solid var(--line); background: #0b1220; }
+  .ts-h { font-size: .8rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: #e2e8f0; }
+  .ts-legend { display: flex; gap: .45rem; align-items: center; font-size: .68rem; color: var(--muted); } .ts-legend i { display: inline-block; width: .65rem; height: .65rem; border-radius: 2px; margin-right: -.2rem; } .ts-legend i.dash { width: .9rem; height: 0; border-top: 2px dashed; border-radius: 0; } .ts-legend i.dot { border-top-style: dotted; }
+  .ts-bar { display: inline-block; vertical-align: middle; width: 3.2rem; height: 6px; border-radius: 3px; background: #1f2937; overflow: hidden; margin-right: .35rem; } .ts-bar > div { height: 100%; border-radius: 3px; }
+  .ts-res { display: inline-block; min-width: 2.2rem; text-align: center; padding: .05rem .4rem; border-radius: .4rem; font-family: ui-monospace, monospace; background: #1f2937; } .ts-res.hit { background: rgba(52,211,153,.16); color: var(--green); } .ts-res.miss { background: rgba(251,113,133,.14); color: var(--rose); }
+  .ts-tbl tbody tr:nth-child(even) { background: rgba(148,163,184,.04); } .ts-tbl th { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+  @media (max-width: 640px) {
+    .ts-hero { grid-template-columns: auto 1fr; } .ts-ctl { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+    .ts-sum { grid-template-columns: auto 1fr; gap: .6rem; padding: .7rem; } .ts-stats { grid-template-columns: repeat(2, 1fr); gap: .4rem; }
+    .ts-stat { padding: .4rem .5rem; } .ts-stat b { font-size: 1rem; } .ts-ring svg { width: 82px; height: 82px; }
+    .ts-ctl { flex-wrap: nowrap; gap: .5rem; } .ts-seg button { padding: .42rem .75rem; } .ts-step input { width: 4.2rem; }
+    .ts-head { width: 54px; height: 54px; } .ts-name { font-size: 1.12rem; }
+  }
   .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: .5rem; overflow: hidden; } .seg button { border: 0; border-radius: 0; background: transparent; } .seg button.on { background: #1e3a5f; color: #fff; }
   .ts-acc { border-bottom: 1px solid var(--line); padding: .35rem 0; } .ts-acc > summary { cursor: pointer; font-weight: 700; font-size: .85rem; padding: .25rem 0; list-style: none; } .ts-acc > summary::after { content: ' +'; color: var(--muted); } .ts-acc[open] > summary::after { content: ' −'; } .ts-acc > div { padding: .35rem 0; }
   .ts-tbl td, .ts-tbl th { padding: .2rem .35rem; text-align: left; }
@@ -492,11 +526,9 @@
         </div>
         <button type="button" id="tsLoadBtn" class="btn-go">Load lines</button>
       </div>
-      <nav class="row" id="tsMkts" style="flex-wrap:wrap;gap:.35rem"></nav>
-      <div class="grid xs" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.5rem">
-        <div><label class="muted" for="tsGame">Game</label><select id="tsGame" style="width:100%"></select></div>
-        <div><label class="muted" for="tsPlayer">Player</label><select id="tsPlayer" style="width:100%"></select></div>
-      </div>
+      <div class="ts-scroll" id="tsGames" role="tablist" aria-label="Games"></div>
+      <nav class="ts-scroll" id="tsMkts" aria-label="Markets"></nav>
+      <div class="xs"><label class="muted" for="tsPlayer">Player</label><select id="tsPlayer" class="ts-select"></select></div>
       <div class="xs" id="tsStatus"></div>
       <div id="tsBody"></div>
     </div>
@@ -5367,16 +5399,18 @@ function tsChart(gs, line, side, bin) {
   const W = Math.max(n * 28 + 40, Math.min(Math.max(300, (TS.cw || 700) - 30), 1100)), H = 210, top = 18, base = 165, maxV = Math.max(...vals, bin ? 1 : line, avg) * 1.12 || 1;
   const y = v => base - v / maxV * (base - top), bw = Math.min(34, (W - 40) / n - 6);
   const hit = v => bin ? v >= 1 : side === 'U' ? v < line : v > line;
+  const grid = [0.25, 0.5, 0.75, 1].map(t => `<line x1="24" x2="${W - 6}" y1="${(base - t * (base - top)).toFixed(1)}" y2="${(base - t * (base - top)).toFixed(1)}" stroke="#1f2937" stroke-width=".6"/>`).join('');
   return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:${Math.min(W, n * 28 + 40)}px;max-width:${W}px;height:auto;color:currentColor" role="img" aria-label="Game log vs line">
-    <line x1="24" x2="${W - 6}" y1="${base}" y2="${base}" stroke="var(--muted)" stroke-width=".5"/>
-    ${games.map((g, i) => { const cx = 30 + i * ((W - 40) / n) + (W - 40) / n / 2, v = g.v, col = !bin && v === line ? 'var(--muted)' : hit(v) ? 'var(--green)' : 'var(--rose)', hh = bin ? (v ? base - top : 4) : Math.max(1, base - y(v));
-      return `<g><title>${esc(new Date(g.date).toLocaleDateString())} ${g.home ? 'vs' : '@'} ${esc(g.opp)} · ${Math.round(g.min)} min · ${bin ? (v ? 'Yes' : 'No') : fmtN(v)}</title><rect x="${(cx - bw / 2).toFixed(1)}" y="${(base - hh).toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="3" fill="${col}" opacity=".9"/>
-      <text x="${cx.toFixed(1)}" y="${(base - hh - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="currentColor">${bin ? (v ? 'Y' : 'N') : fmtN(v)}</text>
+    <defs><linearGradient id="tsGg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#047857"/></linearGradient><linearGradient id="tsGr" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#9f1239"/></linearGradient></defs>
+    ${grid}<line x1="24" x2="${W - 6}" y1="${base}" y2="${base}" stroke="var(--muted)" stroke-width=".5"/>
+    ${games.map((g, i) => { const cx = 30 + i * ((W - 40) / n) + (W - 40) / n / 2, v = g.v, col = !bin && v === line ? 'var(--muted)' : hit(v) ? 'url(#tsGg)' : 'url(#tsGr)', hh = bin ? (v ? base - top : 4) : Math.max(1, base - y(v));
+      return `<g><title>${esc(new Date(g.date).toLocaleDateString())} ${g.home ? 'vs' : '@'} ${esc(g.opp)} · ${Math.round(g.min)} min · ${bin ? (v ? 'Yes' : 'No') : fmtN(v)}</title><rect x="${(cx - bw / 2).toFixed(1)}" y="${(base - hh).toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="4" fill="${col}"/>
+      <text x="${cx.toFixed(1)}" y="${(base - hh - 4).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="currentColor">${bin ? (v ? 'Y' : 'N') : fmtN(v)}</text>
       <text x="${cx.toFixed(1)}" y="${base + 13}" text-anchor="middle" font-size="9" fill="var(--muted)">${g.home ? '' : '@'}${esc(String(g.opp).slice(0, 4))}</text>
       <text x="${cx.toFixed(1)}" y="${base + 25}" text-anchor="middle" font-size="8" fill="var(--muted)">${esc(new Date(g.date).toLocaleDateString([], { month: 'numeric', day: 'numeric' }))}</text>
       <text x="${cx.toFixed(1)}" y="${base + 36}" text-anchor="middle" font-size="8" fill="var(--muted)">${Math.round(g.min)}m</text></g>`; }).join('')}
     ${bin ? '' : `<line x1="24" x2="${W - 6}" y1="${y(line).toFixed(1)}" y2="${y(line).toFixed(1)}" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="2" y="${(y(line) + 3).toFixed(1)}" font-size="10" fill="var(--amber)">${fmtN(line)}</text>
-    <line x1="24" x2="${W - 6}" y1="${y(avg).toFixed(1)}" y2="${y(avg).toFixed(1)}" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2 3"/>`}
+    <line x1="24" x2="${W - 6}" y1="${y(avg).toFixed(1)}" y2="${y(avg).toFixed(1)}" stroke="var(--sky)" stroke-width="1.2" stroke-dasharray="2 3"/>`}
   </svg></div>`;
 }
 const tsChip = (key, lab, on, extra = '') => `<button type="button" class="ts-chip ${on ? 'on' : ''}" data-tsf="${esc(key)}">${lab}${extra}</button>`;
@@ -5386,7 +5420,8 @@ function renderTesting() {
   if (box.clientWidth) TS.cw = box.clientWidth;   // draw the chart at the real width (phones)
   $('tsMkts').innerHTML = TS_MK.map(m => `<button type="button" class="ts-chip ${S.mk === m[0] ? 'on' : ''}" data-tsmk="${m[0]}">${m[1]}</button>`).join('');
   const X = tsCtx();
-  $('tsGame').innerHTML = (X.evs || []).map(e => `<option value="${esc(e.eventId)}" ${X.ev?.eventId === e.eventId ? 'selected' : ''}>${esc(e.awayAbbr)} @ ${esc(e.homeAbbr)} · ${esc(new Date(e.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</option>`).join('') || '<option>No upcoming NBA games loaded</option>';
+  $('tsGames').innerHTML = (X.evs || []).map(e => `<button type="button" class="ts-game ${X.ev?.eventId === e.eventId ? 'on' : ''}" data-tsgame="${esc(e.eventId)}"><b>${esc(e.awayAbbr)} <span class="muted">@</span> ${esc(e.homeAbbr)}</b><span>${esc(new Date(e.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</span></button>`).join('') || '<span class="xs muted">No upcoming NBA games loaded</span>';
+  $('tsGames').querySelector('.on')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   $('tsPlayer').innerHTML = (X.players || []).map(p => `<option value="${esc(p.playerId)}" ${X.P?.playerId === p.playerId ? 'selected' : ''}>${esc(p.playerName)} · ${esc(String(p.teamId) === String(X.ev.homeTeamId) ? X.ev.homeAbbr : X.ev.awayAbbr)}${p.group ? ' · ' + esc(p.group) : ''}</option>`).join('');
   $('tsStatus').innerHTML = TS.busy || TS.msg ? `<span class="${TS.busy ? 'muted' : 'amber'}">${esc(TS.msg)}</span>` : '';
   if (!X.P) { box.innerHTML = TS.busy ? '' : '<div class="xs muted">Pick a game. If the list is empty, there are no upcoming NBA games loaded yet.</div>'; return; }
@@ -5425,7 +5460,7 @@ function renderTesting() {
   const nActive = Object.entries(f).filter(([k2, v]) => v && !(k2 === 'seasons' && v.length === 1 && v[0] === cur) && !(k2 === 'sample' && v === 'max')).length;
   // splits table (same seasons as the filter)
   const base = G.filter(g => seasons.includes(g.season));
-  const splitRow = (lab, xs) => { const s2 = tsStats(xs.map(g => g.v), line, side, bin); return `<tr><td>${lab}</td><td class="mono">${s2.n}</td><td class="mono">${s2.n ? (bin ? pct(s2.avg) : anF(S.mode === 'med' ? s2.med : s2.avg)) : '—'}</td><td class="mono ${s2.gn ? (s2.h / s2.gn >= 0.6 ? 'green' : s2.h / s2.gn <= 0.4 ? 'rose' : '') : 'muted'}">${s2.gn ? `${s2.h}/${s2.gn} (${Math.round(s2.h / s2.gn * 100)}%)` : '—'}</td></tr>`; };
+  const splitRow = (lab, xs) => { const s2 = tsStats(xs.map(g => g.v), line, side, bin); return `<tr><td>${lab}</td><td class="mono">${s2.n}</td><td class="mono">${s2.n ? (bin ? pct(s2.avg) : anF(S.mode === 'med' ? s2.med : s2.avg)) : '—'}</td><td>${s2.gn ? (q => `<div class="ts-bar"><div style="width:${Math.round(q * 100)}%;background:var(--${q >= 0.6 ? 'green' : q <= 0.4 ? 'rose' : 'amber'})"></div></div><span class="mono ${q >= 0.6 ? 'green' : q <= 0.4 ? 'rose' : 'amber'}">${Math.round(q * 100)}%</span> <span class="muted mono">${s2.h}/${s2.gn}</span>`)(s2.h / s2.gn) : '<span class="muted">—</span>'}</td></tr>`; };
   const tierOf = g => { const o = X.ranks?.dvp?.[g.oppId]; return o ? (o.r <= 10 ? 'top' : o.r > o.of - 10 ? 'bot' : 'mid') : null; };
   const splits = `<table class="xs ts-tbl"><thead><tr><th>Split</th><th>G</th><th>${S.mode === 'med' ? 'Med' : 'Avg'}</th><th>Hit</th></tr></thead><tbody>
     ${splitRow('All', base)}${splitRow('Last 5', base.slice(0, 5))}${splitRow('Last 10', base.slice(0, 10))}${splitRow('Home', base.filter(g => g.home === true))}${splitRow('Away', base.filter(g => g.home === false))}
@@ -5442,31 +5477,48 @@ function renderTesting() {
       const ad = bin ? null : anAvg(rows.map(r => r.diff));
       sim = `<div class="grid" style="grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:.5rem">${tile('AVG DIFF', ad === null ? '—' : (ad > 0 ? '+' : '') + anF(ad), ad === null ? 'muted' : (side === 'U' ? ad < 0 : ad > 0) ? 'green' : 'rose')}${tile('AVG DIFF %', ad === null || !line ? '—' : (ad > 0 ? '+' : '') + anF(ad / line * 100, 0) + '%', ad === null ? 'muted' : (side === 'U' ? ad < 0 : ad > 0) ? 'green' : 'rose')}${tile('HIT RATE', graded.length ? `${Math.round(graded.filter(r => r.ok).length / graded.length * 100)}%` : '—', graded.length ? (graded.filter(r => r.ok).length / graded.length >= 0.6 ? 'green' : graded.filter(r => r.ok).length / graded.length <= 0.4 ? 'rose' : 'amber') : 'muted')}</div>
         <div class="xs muted" style="margin-bottom:.3rem">${esc(A.pn[0].toUpperCase() + A.pn.slice(1))} who played ${A.qualVol}+ min against ${esc(X.oppAbbr)} this season (${rows.length} player-games)</div>
-        ${rows.length ? `<div class="table-wrap"><table class="xs ts-tbl"><thead><tr><th>Date</th><th>Team</th><th>Player</th><th>Line</th><th>Result</th><th>Diff %</th></tr></thead><tbody>${rows.slice(TS.page * per, TS.page * per + per).map(r => `<tr><td class="mono">${esc(new Date(r.date).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</td><td>${esc(r.teamAbbr)}</td><td>${esc(r.name)}</td><td class="mono">${bin ? 'Yes' : fmtN(line)}</td><td class="mono ${r.ok === null ? 'muted' : r.ok ? 'green' : 'rose'}">${bin ? (r.v ? 'Yes' : 'No') : fmtN(r.v)}</td><td class="mono ${r.ok === null ? 'muted' : r.ok ? 'green' : 'rose'}">${bin || !line ? '—' : (r.diff > 0 ? '+' : '') + Math.round(r.diff / line * 100) + '%'}</td></tr>`).join('')}</tbody></table></div>
+        ${rows.length ? `<div class="table-wrap"><table class="xs ts-tbl"><thead><tr><th>Date</th><th>Team</th><th>Player</th><th>Line</th><th>Result</th><th>Diff %</th></tr></thead><tbody>${rows.slice(TS.page * per, TS.page * per + per).map(r => `<tr><td class="mono">${esc(new Date(r.date).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</td><td>${esc(r.teamAbbr)}</td><td>${esc(r.name)}</td><td class="mono">${bin ? 'Yes' : fmtN(line)}</td><td><span class="ts-res ${r.ok === null ? '' : r.ok ? 'hit' : 'miss'}">${bin ? (r.v ? 'Yes' : 'No') : fmtN(r.v)}</span></td><td class="mono ${r.ok === null ? 'muted' : r.ok ? 'green' : 'rose'}">${bin || !line ? '—' : (r.diff > 0 ? '+' : '') + Math.round(r.diff / line * 100) + '%'}</td></tr>`).join('')}</tbody></table></div>
           <div class="row" style="justify-content:center;gap:.5rem;margin-top:.35rem"><button type="button" class="xs" data-tspage="-1" ${TS.page ? '' : 'disabled'}>‹</button><span class="xs muted">${TS.page + 1} / ${pages}</span><button type="button" class="xs" data-tspage="1" ${TS.page < pages - 1 ? '' : 'disabled'}>›</button></div>` : '<div class="xs muted">Insufficient data</div>'}`;
       matchup = `<details ${tsAcc('matchup')}><summary>🔍 Full matchup analysis vs ${esc(X.oppAbbr)} (defense, position, score)</summary>${anHtml(A).replace(/<button type="button" class="xs" data-olanclose>Close ✕<\/button>/, '')}</details>`;
     }
   } else if (!m[3]) sim = `<div class="xs muted">Similar-player comparison isn't available for ${esc(m[1])} (box scores don't carry it). Pick Points, Rebounds, Assists, Threes, a combo, Blocks, Steals or Double Double.</div>`;
-  box.innerHTML = `<div class="stack" style="gap:.7rem">
-    <div class="row between" style="flex-wrap:wrap;gap:.5rem;align-items:flex-end">
-      <div><div class="lg xb">${esc(X.P.playerName)} <span class="muted xs">${esc(X.teamAbbr)} ${X.home ? 'vs' : '@'} ${esc(X.oppAbbr)}${pos ? ' · ' + AN_SP.NBA.pos[pos] : ''}</span></div>
-        <div class="xs muted">${esc(m[1])}${bookLine !== null ? ` · books' line <b class="mono">${fmtN(bookLine)}</b>` : ' · no books\' line loaded (press Load lines, or set your own)'}${X.row?.mean > 0 ? ` · model projection <b class="mono sky">${anF(X.row.mean)}</b>` : ''}</div></div>
-      ${bin ? '' : `<div class="row" style="gap:.4rem;align-items:center"><span class="seg"><button type="button" class="${side === 'O' ? 'on' : ''}" data-tsside="O">Over</button><button type="button" class="${side === 'U' ? 'on' : ''}" data-tsside="U">Under</button></span>
-        <button type="button" class="xs" data-tsstep="-1">−</button><input id="tsLine" type="number" step="0.5" value="${line}" style="width:4.8rem" aria-label="Line"><button type="button" class="xs" data-tsstep="1">+</button>${S.line !== null && bookLine !== null ? '<button type="button" class="xs" data-tsreset>Book line</button>' : ''}</div>`}
+  // quick hit-rate strip (same seasons, before the other filters)
+  const strip = [['L5', base.slice(0, 5)], ['L10', base.slice(0, 10)], ['L20', base.slice(0, 20)], [seasons.length > 1 ? 'All' : 'Season', base], ['H2H', G.filter(g => g.oppId === X.oppId)]].map(([lab, xs]) => {
+    const q = tsStats(xs.map(g => g.v), line, side, bin), r2 = q.gn ? q.h / q.gn : null;
+    return `<div class="ts-cell"><span>${lab}</span><b class="${r2 === null ? 'muted' : r2 >= 0.6 ? 'green' : r2 <= 0.4 ? 'rose' : 'amber'}">${r2 === null ? '—' : Math.round(r2 * 100) + '%'}</b><i>${q.gn ? q.h + '/' + q.gn : 'no games'}</i></div>`; }).join('');
+  const ring = (() => { const r = 34, c = 2 * Math.PI * r, f = hr ?? 0, col = hr === null ? 'var(--muted)' : `var(--${hrCls === 'muted' ? 'muted' : hrCls})`;
+    return `<svg viewBox="0 0 84 84" width="92" height="92" role="img" aria-label="Hit rate"><circle cx="42" cy="42" r="${r}" fill="none" stroke="#1f2937" stroke-width="9"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/>
+      <text x="42" y="44" text-anchor="middle" font-size="19" font-weight="800" fill="currentColor">${hr === null ? '—' : Math.round(hr * 100) + '%'}</text><text x="42" y="58" text-anchor="middle" font-size="8.5" fill="var(--muted)">${st.h}/${st.gn} hit</text></svg>`; })();
+  const stat = (lab, val, cls = '') => `<div class="ts-stat"><span>${lab}</span><b class="mono ${cls}">${val}</b></div>`;
+  const dcls = v => v === null ? 'muted' : (side === 'U' ? v < 0 : v > 0) ? 'green' : 'rose';
+  const pill = (lab, val, cls = '') => `<span class="ts-pill"><span>${lab}</span><b class="mono ${cls}">${val}</b></span>`;
+  const ini = X.P.playerName.split(/\s+/).map(w => w[0]).slice(0, 2).join('');
+  box.innerHTML = `<div class="stack" style="gap:.75rem">
+    <div class="ts-hero">
+      <div class="ts-head"><span>${esc(ini)}</span><img src="https://a.espncdn.com/i/headshots/nba/players/full/${esc(X.P.playerId)}.png" alt="" loading="lazy" onerror="this.remove()"></div>
+      <div class="ts-who">
+        <div class="ts-name">${esc(X.P.playerName)}</div>
+        <div class="xs muted">${esc(X.teamAbbr)}${pos ? ' · ' + AN_SP.NBA.pos[pos][0].toUpperCase() + AN_SP.NBA.pos[pos].slice(1) : ''} · ${X.home ? 'vs' : '@'} ${esc(X.oppAbbr)} · ${esc(new Date(X.ev.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</div>
+        <div class="row" style="flex-wrap:wrap;gap:.3rem;margin-top:.35rem">${pill(esc(m[1]), bin ? 'Yes' : '')}${bookLine !== null ? pill('Book line', fmtN(bookLine)) : '<span class="ts-pill muted">No book line · press Load lines</span>'}${X.row?.mean > 0 && !bin ? pill('Model', anF(X.row.mean), 'sky') : ''}${seasonAvg !== null ? pill('Season ' + (bin ? 'rate' : 'avg'), bin ? pct(seasonAvg) : anF(seasonAvg)) : ''}</div>
+      </div>
+      ${bin ? '' : `<div class="ts-ctl"><span class="seg ts-seg"><button type="button" class="${side === 'O' ? 'on' : ''}" data-tsside="O">Over</button><button type="button" class="${side === 'U' ? 'on' : ''}" data-tsside="U">Under</button></span>
+        <div class="ts-step"><button type="button" data-tsstep="-1" aria-label="Lower line">−</button><input id="tsLine" type="number" step="0.5" value="${line}" aria-label="Line"><button type="button" data-tsstep="1" aria-label="Raise line">+</button></div>
+        ${S.line !== null && bookLine !== null ? '<button type="button" class="xs ts-link" data-tsreset>↺ Book line</button>' : ''}</div>`}
     </div>
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:.5rem">
-      ${tile('HIT RATE', hr === null ? '—' : `${Math.round(hr * 100)}%`, hrCls)}${tile(bin ? 'HITS' : 'HIT / GAMES', `${st.h}/${st.gn}`)}${tile(bin ? 'RATE' : S.mode === 'med' ? 'MEDIAN' : 'AVERAGE', mid === null ? '—' : bin ? pct(mid) : anF(mid))}
-      ${bin ? '' : tile('AVG DIFF', st.diff === null ? '—' : (st.diff > 0 ? '+' : '') + anF(st.diff), st.diff === null ? 'muted' : (side === 'U' ? st.diff < 0 : st.diff > 0) ? 'green' : 'rose') + tile('AVG DIFF %', st.diffP === null ? '—' : (st.diffP > 0 ? '+' : '') + anF(st.diffP * 100, 0) + '%', st.diffP === null ? 'muted' : (side === 'U' ? st.diffP < 0 : st.diffP > 0) ? 'green' : 'rose')}
+    <div class="ts-sum">
+      <div class="ts-ring">${ring}<div class="xs muted" style="text-align:center">${bin ? esc(m[1]) : `${side === 'U' ? 'Under' : 'Over'} ${fmtN(line)}`}<br>${st.n} game${st.n === 1 ? '' : 's'}${nActive ? ` · <span class="amber">${nActive} filter${nActive === 1 ? '' : 's'}</span>` : ''}</div></div>
+      <div class="ts-stats">${stat(bin ? 'Rate' : S.mode === 'med' ? 'Median' : 'Average', mid === null ? '—' : bin ? pct(mid) : anF(mid))}${bin ? stat('Hits', `${st.h}/${st.gn}`) : stat('Avg diff', st.diff === null ? '—' : (st.diff > 0 ? '+' : '') + anF(st.diff), dcls(st.diff)) + stat('Avg diff %', st.diffP === null ? '—' : (st.diffP > 0 ? '+' : '') + anF(st.diffP * 100, 0) + '%', dcls(st.diffP))}${stat('Avg minutes', anF(anAvg(gs.map(g => g.min))))}</div>
     </div>
-    <div class="inset"><div class="row between" style="flex-wrap:wrap;gap:.4rem;margin-bottom:.3rem"><div class="xs b sky">Game log · ${st.n} game${st.n === 1 ? '' : 's'} ${nActive ? `<span class="amber">(${nActive} filter${nActive === 1 ? '' : 's'} on)</span>` : ''}</div><div class="xs muted">${bin ? 'green = yes' : 'green = hit · amber dashed = line · blue dotted = average'}</div></div>${tsChart(gs, line, side, bin)}</div>
-    <div class="inset stack" style="gap:.5rem">
-      <div class="row between" style="gap:.4rem"><span class="seg"><button type="button" class="${S.ft === 'sug' ? 'on' : ''}" data-tsft="sug">Suggested</button><button type="button" class="${S.ft === 'all' ? 'on' : ''}" data-tsft="all">All Filters</button></span>
-        <div class="row" style="gap:.4rem;align-items:center"><span class="xs muted">Mode</span><span class="seg"><button type="button" class="${S.mode !== 'med' ? 'on' : ''}" data-tsmode="avg">Avg</button><button type="button" class="${S.mode === 'med' ? 'on' : ''}" data-tsmode="med">Med</button></span>${nActive ? '<button type="button" class="xs" data-tsclear>Clear filters</button>' : ''}</div></div>
+    <div class="ts-strip">${strip}</div>
+    <div class="ts-panel"><div class="row between" style="flex-wrap:wrap;gap:.4rem;margin-bottom:.4rem"><div class="ts-h">Game log <span class="muted">· ${st.n} game${st.n === 1 ? '' : 's'}</span></div><div class="ts-legend"><i style="background:var(--green)"></i>hit <i style="background:var(--rose)"></i>miss ${bin ? '' : '<i class="dash" style="border-color:var(--amber)"></i>line <i class="dash dot" style="border-color:var(--sky)"></i>avg'}</div></div>${tsChart(gs, line, side, bin)}</div>
+    <div class="ts-panel stack" style="gap:.6rem">
+      <div class="row between" style="gap:.4rem;flex-wrap:wrap"><span class="seg ts-seg"><button type="button" class="${S.ft === 'sug' ? 'on' : ''}" data-tsft="sug">Suggested</button><button type="button" class="${S.ft === 'all' ? 'on' : ''}" data-tsft="all">All Filters</button></span>
+        <div class="row" style="gap:.4rem;align-items:center"><span class="xs muted">Mode</span><span class="seg ts-seg sm2"><button type="button" class="${S.mode !== 'med' ? 'on' : ''}" data-tsmode="avg">Avg</button><button type="button" class="${S.mode === 'med' ? 'on' : ''}" data-tsmode="med">Med</button></span>${nActive ? '<button type="button" class="xs" data-tsclear>Clear filters</button>' : ''}</div></div>
       ${S.ft === 'all' ? all : sug}
     </div>
     <div class="an-grid">
-      <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">Splits ${bin ? '' : `vs ${side === 'U' ? 'Under' : 'Over'} ${fmtN(line)}`} <span class="muted">(${seasons.join(', ')})</span></div>${splits}</div>
-      <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">Similar players vs ${esc(X.oppAbbr)}</div>${sim}</div>
+      <div class="ts-panel"><div class="ts-h" style="margin-bottom:.4rem">Splits ${bin ? '' : `vs ${side === 'U' ? 'Under' : 'Over'} ${fmtN(line)}`} <span class="muted">(${seasons.join(', ')})</span></div>${splits}</div>
+      <div class="ts-panel"><div class="ts-h" style="margin-bottom:.4rem">Similar players vs ${esc(X.oppAbbr)}</div>${sim}</div>
     </div>
     ${matchup}
   </div>`;
@@ -5492,7 +5544,7 @@ async function openTesting() {
 function tsWire() {
   const S = tsF(), rer = () => { save(); renderTesting(); };
   $('tsMkts').addEventListener('click', e => { const b = e.target.closest('[data-tsmk]'); if (!b) return; S.mk = b.dataset.tsmk; TS.page = 0; rer(); });
-  $('tsGame').addEventListener('change', e => { S.game = e.target.value; S.pid = ''; TS.page = 0; rer(); });
+  $('tsGames').addEventListener('click', e => { const b = e.target.closest('[data-tsgame]'); if (!b) return; S.game = b.dataset.tsgame; S.pid = ''; TS.page = 0; rer(); });
   $('tsPlayer').addEventListener('change', e => { S.pid = e.target.value; TS.page = 0; rer(); });
   $('tsLoadBtn').addEventListener('click', async () => { if (!hasOdds()) { TS.msg = 'Add your Odds API key (Prop outliers) first.'; renderTesting(); return; } TS.msg = 'Loading sportsbook lines…'; TS.busy = true; renderTesting(); try { await autoFillLines('NBA', false); refreshAllSims(); TS.msg = ''; } catch (e) { TS.msg = e.message; } TS.busy = false; renderTesting(); });
   $('tsBody').addEventListener('click', e => {
