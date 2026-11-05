@@ -129,6 +129,12 @@
   .neg { color: #fda4af; }
 
   details > summary { list-style: none; cursor: pointer; }
+  .sc-tag { display: inline-block; padding: .08rem .45rem; border-radius: 999px; font-size: .66rem; font-weight: 700; white-space: nowrap; }
+  .sc-tag.b2 { background: rgba(251,113,133,.16); color: var(--rose); border: 1px solid rgba(251,113,133,.45); } .sc-tag.b1 { background: rgba(251,191,36,.12); color: var(--amber); border: 1px solid rgba(251,191,36,.4); }
+  .sc-tag.t3 { background: rgba(167,139,250,.14); color: #c4b5fd; border: 1px solid rgba(167,139,250,.4); } .sc-tag.rs { background: rgba(52,211,153,.1); color: var(--green); border: 1px solid rgba(52,211,153,.3); }
+  .sc-side { padding: .6rem; border-radius: .75rem; background: #0f172a; border: 1px solid #1f2937; } .sc-side.warn { border-color: rgba(251,113,133,.55); background: linear-gradient(180deg, rgba(251,113,133,.08), #0f172a 60%); }
+  .sc-inj { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .3rem; font-size: .76rem; } .sc-inj .muted { font-size: .7rem; }
+  .sc-tbl tr.sc-b2 { background: rgba(251,113,133,.10); } .sc-tbl tr.sc-b1 { background: rgba(251,191,36,.07); } .sc-tbl tr.sc-today td:first-child { box-shadow: inset 3px 0 0 var(--sky); }
   .sim-drops { display: flex; flex-direction: column; gap: .5rem; }
   .sim-drop { padding: 0; overflow: hidden; } .sim-drop > summary { display: flex; align-items: center; gap: .6rem; padding: .75rem .9rem; transition: background .15s; }
   .sim-drop > summary:hover { background: rgba(148,163,184,.05); } .sim-drop > summary::-webkit-details-marker { display: none; }
@@ -248,6 +254,7 @@
       <button type="button" data-view="analyzer">📈 Prop Analyzer</button>
       <button type="button" data-view="first">🥇 First Basket</button>
       <button type="button" data-view="ratings">📊 Team Ratings</button>
+      <button type="button" data-view="sched">📆 Schedules</button>
       <button type="button" data-view="recap">📰 Daily Recap</button>
       <button type="button" data-view="tracker">📐 Model Report</button>
       <button type="button" data-view="audit">🛡️ Roster Audit</button>
@@ -527,6 +534,20 @@
       </div>
       <div class="xs" id="paStatus"></div>
       <div id="paBody"></div>
+    </div>
+  </section>
+
+  <section id="view-sched" class="stack hidden">
+    <div class="card stack">
+      <div class="row between" style="flex-wrap:wrap;gap:.5rem">
+        <div>
+          <h2 class="sm xb">📆 Schedules · NBA</h2>
+          <p class="note" style="margin:0">Every team's schedule with back-to-backs highlighted (red = 2nd night, amber = 1st night) and 3-games-in-4-nights stretches. Pick a day to see each team's rest situation and ESPN's injury report: who's out and who's questionable.</p>
+        </div>
+        <button type="button" id="scRefresh" class="btn-soft">↻ Refresh</button>
+      </div>
+      <div class="xs" id="scStatus"></div>
+      <div id="scBody"></div>
     </div>
   </section>
 
@@ -2408,8 +2429,8 @@ function renderChrome() {
   const props = SPORTS[APP.sport].props;
   document.querySelectorAll('[data-needs-props]').forEach(b => b.classList.toggle('hidden', !props));
   $('tdTabBtn').textContent = { NBA: '20+ points', NHL: 'Anytime goal',}[APP.sport] || 'Anytime TD';
-  $('tickerCard').classList.toggle('hidden', ['outliers', 'first', 'recap', 'tracker', 'ratings', 'testing'].includes(APP.view));
-  for (const v of ['sim', 'slate', 'recap', 'props', 'ratings', 'outliers', 'first', 'analyzer', 'testing', 'tracker', 'audit']) $(`view-${v}`).classList.toggle('hidden', v !== APP.view);
+  $('tickerCard').classList.toggle('hidden', ['outliers', 'first', 'recap', 'tracker', 'ratings', 'testing', 'sched'].includes(APP.view));
+  for (const v of ['sim', 'slate', 'recap', 'props', 'ratings', 'outliers', 'first', 'analyzer', 'testing', 'sched', 'tracker', 'audit']) $(`view-${v}`).classList.toggle('hidden', v !== APP.view);
   $('td30TabBtn').classList.toggle('hidden', APP.sport !== 'NBA');
   if (APP.tab === 'td30' && APP.sport !== 'NBA') APP.tab = 'summary';
   for (const t of ['summary', 'props', 'td', 'td30', 'roster']) $(`tab-${t}`).classList.toggle('hidden', t !== APP.tab);
@@ -5616,6 +5637,140 @@ function tsWire() {
     const k = e.target.dataset?.tsnum; if (k) { const v = num(e.target.value); S.f[k] = v > 0 ? v : null; setTimeout(rer, 0); }
   });
 }
+/* =====================================================================
+   📆 SCHEDULES (NBA) — every team's season schedule from ESPN with back-to-backs and 3-in-4s flagged,
+   plus ESPN's injury report for teams playing on the picked day ("who's playing and who isn't").
+   ===================================================================== */
+const SC = { busy: false, msg: '', data: null, inj: null, injT: 0, day: null, team: null };
+const SC_KEY = 'apexquant.nbasched';
+const scDay = d => new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });   // ET calendar day, YYYY-MM-DD
+const scUTC = k => { const [y, m, d] = k.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+const scGap = (a, b) => Math.round((scUTC(a) - scUTC(b)) / 864e5);
+const scFmtDay = k => new Date(scUTC(k) + 12 * 3600e3).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+async function scLoad(force) {
+  let c = null; try { c = JSON.parse(localStorage.getItem(SC_KEY) || 'null'); } catch {}
+  if (!force && c?.teams?.length && Date.now() - c.t < 6 * 3600e3) SC.data = c;
+  else {
+    SC.msg = 'Loading NBA teams…'; scStatus();
+    const tj = await fetchJson(urlFor('NBA', 'teams'), 12000, 1);
+    const teams = (tj.sports?.[0]?.leagues?.[0]?.teams || []).map(x => x.team).filter(Boolean)
+      .map(t => ({ id: String(t.id), abbr: t.abbreviation || '', name: t.displayName || t.name || '', logo: t.logos?.[0]?.href || '' })).sort((a, b) => a.abbr.localeCompare(b.abbr));
+    if (!teams.length) throw new Error('ESPN returned no NBA teams');
+    const sched = {}, q = [...teams]; let done = 0;
+    const num = x => { const v = x?.score; if (v === null || v === undefined) return null; const n = +(typeof v === 'object' ? (v.value ?? v.displayValue) : v); return Number.isFinite(n) ? n : null; };
+    await Promise.all(Array.from({ length: 6 }, async () => { while (q.length) { const t = q.shift(); try {
+      const d = await fetchJson(urlFor('NBA', `teams/${t.id}/schedule?seasontype=2`), 12000, 1);
+      sched[t.id] = (d.events || []).map(e => { const c0 = e.competitions?.[0] || {}, cs = c0.competitors || [];
+        const me = cs.find(x => String(x.team?.id ?? x.id) === t.id), op = cs.find(x => String(x.team?.id ?? x.id) !== t.id);
+        return { id: String(e.id), date: e.date || c0.date, oppId: String(op?.team?.id ?? op?.id ?? ''), opp: op?.team?.abbreviation || '', home: me?.homeAway === 'home', done: Boolean(c0.status?.type?.completed ?? e.status?.type?.completed), pf: num(me), pa: num(op) }; })
+        .filter(g => g.date).sort((a, b) => new Date(a.date) - new Date(b.date));
+    } catch {} done++; SC.msg = `Loading team schedules from ESPN: ${done}/${teams.length}…`; scStatus(); } }));
+    SC.data = { t: Date.now(), teams, sched };
+    try { localStorage.setItem(SC_KEY, JSON.stringify(SC.data)); } catch {}
+  }
+  // ESPN's league injury report (one call), refreshed every 20 minutes
+  if (force || !SC.inj || Date.now() - SC.injT > 20 * 60e3) {
+    try {
+      const d = await fetchJson(urlFor('NBA', 'injuries'), 12000, 0), out = {};
+      for (const t of d.injuries || []) {
+        const tm = SC.data.teams.find(x => x.id === String(t.id) || x.name === t.displayName); if (!tm) continue;
+        out[tm.id] = (t.injuries || []).map(i => ({ name: i.athlete?.displayName || i.athlete?.fullName || '', pos: i.athlete?.position?.abbreviation || '', status: i.status || i.type?.description || '', note: i.shortComment || i.details?.type || '', date: i.date || '' })).filter(i => i.name);
+      }
+      SC.inj = out; SC.injT = Date.now();
+    } catch { SC.inj = SC.inj || null; }
+  }
+}
+// tag every game: rest days, back-to-back (1st / 2nd night), 3 games in 4 nights
+function scTagged(tid) {
+  const gs = (SC.data?.sched?.[tid] || []).map(g => ({ ...g, day: scDay(g.date) }));
+  gs.forEach((g, i) => {
+    const pv = gs[i - 1], nx = gs[i + 1];
+    g.rest = pv ? scGap(g.day, pv.day) - 1 : null;
+    g.b2b2 = Boolean(pv && scGap(g.day, pv.day) === 1);
+    g.b2b1 = Boolean(nx && scGap(nx.day, g.day) === 1);
+    g.three = gs.filter(x => { const d = scGap(g.day, x.day); return d >= 0 && d <= 3; }).length >= 3;
+  });
+  return gs;
+}
+function scTag(g, short) {
+  const t = [];
+  if (g.b2b2) t.push(`<span class="sc-tag b2">${short ? 'B2B 2nd' : '2nd night of B2B'}</span>`);
+  else if (g.b2b1) t.push(`<span class="sc-tag b1">${short ? 'B2B 1st' : '1st night of B2B'}</span>`);
+  if (g.three) t.push(`<span class="sc-tag t3">3 in 4</span>`);
+  if (!g.b2b2 && g.rest !== null && g.rest >= 2) t.push(`<span class="sc-tag rs">${g.rest} days rest</span>`);
+  return t.join('');
+}
+const scStatus = () => { const el = $('scStatus'); if (el) el.innerHTML = SC.msg ? `<span class="${SC.busy ? 'muted' : 'amber'}">${esc(SC.msg)}</span>` : ''; };
+const scInjCls = s => /out/i.test(s) ? 'rose' : /day|quest|doubt|prob|gtd/i.test(s) ? 'amber' : 'muted';
+function renderSched() {
+  const box = $('scBody'); if (!box) return; scStatus();
+  if (!SC.data) { box.innerHTML = SC.busy ? '' : '<div class="xs muted">Schedules not loaded yet.</div>'; return; }
+  const today = scDay(new Date()), T = Object.fromEntries(SC.data.teams.map(t => [t.id, t])), tagged = Object.fromEntries(SC.data.teams.map(t => [t.id, scTagged(t.id)]));
+  const days = Array.from({ length: 14 }, (_, i) => new Date(scUTC(today) + i * 864e5).toISOString().slice(0, 10));
+  SC.day = days.includes(SC.day) ? SC.day : today;
+  // games on a day (each once), with both teams' tags
+  const gamesOn = k => { const seen = new Set(), out = []; for (const t of SC.data.teams) for (const g of tagged[t.id]) { if (g.day !== k || seen.has(g.id)) continue; seen.add(g.id);
+      const og = tagged[g.oppId]?.find(x => x.id === g.id) || {}; const home = g.home ? { t, g } : { t: T[g.oppId], g: og }, away = g.home ? { t: T[g.oppId], g: og } : { t, g };
+      out.push({ id: g.id, date: g.date, home, away }); } return out.sort((a, b) => new Date(a.date) - new Date(b.date)); };
+  const strip = days.map(k => { const gs = gamesOn(k), nb = gs.reduce((a, x) => a + (x.home.g.b2b2 ? 1 : 0) + (x.away.g.b2b2 ? 1 : 0), 0);
+    return `<button type="button" class="ts-game ${SC.day === k ? 'on' : ''}" data-scday="${k}"><b>${k === today ? 'Today' : esc(scFmtDay(k).split(',')[0])} <span class="muted">${esc(scFmtDay(k).split(', ')[1] || '')}</span></b><span>${gs.length} game${gs.length === 1 ? '' : 's'}${nb ? ` · <b class="rose">${nb} on B2B</b>` : ''}</span></button>`; }).join('');
+  const injList = tid => { const L = SC.inj?.[tid]; if (!SC.inj) return '<div class="xs muted">Injury report unavailable right now.</div>'; if (!L?.length) return '<div class="xs green">No injuries reported</div>';
+    return `<ul class="sc-inj">${L.map(i => `<li><b class="${scInjCls(i.status)}">${esc(i.status || '—')}</b> ${esc(i.name)}${i.pos ? ` <span class="muted">${esc(i.pos)}</span>` : ''}${i.note ? `<div class="muted">${esc(i.note)}</div>` : ''}</li>`).join('')}</ul>`; };
+  const side = (x, lab) => `<div class="sc-side ${x.g.b2b2 ? 'warn' : ''}"><div class="row between" style="gap:.4rem;flex-wrap:wrap"><div class="row" style="gap:.45rem;align-items:center">${x.t?.logo ? `<img src="${esc(x.t.logo)}" alt="" width="26" height="26" loading="lazy">` : ''}<div><div class="xs muted">${lab}</div><b>${esc(x.t?.abbr || '?')}</b> <span class="xs muted">${esc(x.t?.name || '')}</span></div></div><div class="row" style="gap:.3rem;flex-wrap:wrap">${scTag(x.g)}</div></div>
+      ${x.g.b2b2 ? `<div class="xs rose" style="margin:.35rem 0">Played yesterday${(() => { const pv = tagged[x.t.id]?.[tagged[x.t.id].findIndex(z => z.id === x.g.id) - 1]; return pv ? ` (${pv.home ? 'vs' : '@'} ${esc(pv.opp)})` : ''; })()}. Rest risk: teams often sit stars or cut minutes on the 2nd night. Check the status ~90 min before tip.</div>` : ''}
+      <div style="margin-top:.35rem">${injList(x.t?.id)}</div></div>`;
+  const dayGames = gamesOn(SC.day);
+  const dayHtml = dayGames.length ? dayGames.map(G => `<div class="ts-panel stack" style="gap:.5rem"><div class="row between"><b>${esc(G.away.t?.abbr || '?')} @ ${esc(G.home.t?.abbr || '?')}</b><span class="xs muted">${esc(new Date(G.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</span></div>
+      <div class="an-grid">${side(G.away, 'AWAY')}${side(G.home, 'HOME')}</div></div>`).join('') : '<div class="xs muted">No NBA games this day.</div>';
+  // one team's season
+  SC.team = T[SC.team] ? SC.team : (dayGames[0]?.home.t?.id || SC.data.teams[0].id);
+  const tg = tagged[SC.team] || [], left = tg.filter(g => g.day >= today), nextB2B = left.find(g => g.b2b1 || g.b2b2);
+  const teamChips = SC.data.teams.map(t => `<button type="button" class="ts-chip ${SC.team === t.id ? 'on' : ''}" data-scteam="${t.id}">${esc(t.abbr)}</button>`).join('');
+  const showPast = Boolean(STORE.scPast);
+  const rows = tg.filter(g => showPast || g.day >= today).map(g => `<tr class="${g.b2b2 ? 'sc-b2' : g.b2b1 ? 'sc-b1' : ''} ${g.day === today ? 'sc-today' : ''}">
+      <td class="mono">${esc(scFmtDay(g.day))}</td><td>${g.home ? 'vs' : '@'} <b>${esc(g.opp)}</b></td>
+      <td class="mono">${g.done && g.pf !== null ? `<span class="${g.pf > g.pa ? 'green' : 'rose'}">${g.pf > g.pa ? 'W' : 'L'} ${g.pf}-${g.pa}</span>` : esc(new Date(g.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</td>
+      <td class="mono">${g.rest === null ? '—' : g.rest}</td><td>${scTag(g, true)}</td></tr>`).join('');
+  const team = T[SC.team];
+  // league overview
+  const lg = SC.data.teams.map(t => { const g = tagged[t.id], rem = g.filter(x => x.day >= today); return { t, all: g.filter(x => x.b2b2).length, rem: rem.filter(x => x.b2b2).length, three: rem.filter(x => x.three).length, next: rem.find(x => x.b2b1 || x.b2b2) }; })
+    .sort((a, b) => b.rem - a.rem || a.t.abbr.localeCompare(b.t.abbr));
+  box.innerHTML = `<div class="stack" style="gap:.75rem">
+    <div class="ts-scroll">${strip}</div>
+    <div class="row between" style="flex-wrap:wrap;gap:.4rem"><div class="ts-h">${SC.day === today ? 'Today' : esc(scFmtDay(SC.day))} · ${dayGames.length} game${dayGames.length === 1 ? '' : 's'}</div>
+      <div class="ts-legend"><span class="sc-tag b2">2nd night of B2B</span><span class="sc-tag b1">1st night</span><span class="sc-tag t3">3 in 4</span></div></div>
+    <div class="stack" style="gap:.6rem">${dayHtml}</div>
+    <div class="ts-panel stack" style="gap:.6rem">
+      <div class="row between" style="flex-wrap:wrap;gap:.4rem"><div class="ts-h">Team schedule · ${esc(team?.name || '')}</div>
+        <label class="xs row" style="gap:.35rem"><input type="checkbox" id="scPast" ${showPast ? 'checked' : ''}> Show played games</label></div>
+      <div class="ts-scroll">${teamChips}</div>
+      <div class="row" style="gap:.4rem;flex-wrap:wrap">
+        <span class="ts-pill"><span>Back-to-backs</span><b class="mono">${tg.filter(g => g.b2b2).length}</b></span>
+        <span class="ts-pill"><span>Left</span><b class="mono rose">${left.filter(g => g.b2b2).length}</b></span>
+        <span class="ts-pill"><span>3-in-4 stretches left</span><b class="mono">${left.filter(g => g.three).length}</b></span>
+        <span class="ts-pill"><span>Next B2B</span><b class="mono">${nextB2B ? esc(scFmtDay(nextB2B.day)) : '—'}</b></span></div>
+      <div class="table-wrap"><table class="xs ts-tbl sc-tbl"><thead><tr><th>Date</th><th>Opponent</th><th>Result / Time</th><th>Rest</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No games.</td></tr>'}</tbody></table></div>
+    </div>
+    <details class="ts-panel"><summary class="ts-h">League back-to-back overview ▾</summary>
+      <div class="table-wrap" style="margin-top:.5rem"><table class="xs ts-tbl"><thead><tr><th>Team</th><th>B2Bs (season)</th><th>Left</th><th>3-in-4 left</th><th>Next B2B</th></tr></thead><tbody>
+      ${lg.map(r => `<tr><td><button type="button" class="ts-link" data-scteam="${r.t.id}"><b>${esc(r.t.abbr)}</b></button> <span class="muted">${esc(r.t.name)}</span></td><td class="mono">${r.all}</td><td class="mono ${r.rem ? 'rose' : ''}">${r.rem}</td><td class="mono">${r.three}</td><td class="mono">${r.next ? esc(scFmtDay(r.next.day)) : '—'}</td></tr>`).join('')}</tbody></table></div></details>
+    <div class="xs muted">Schedules and injuries from ESPN · schedules refreshed ${esc(new Date(SC.data.t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}${SC.injT ? ` · injuries ${esc(new Date(SC.injT).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}` : ''}. Days are Eastern time.</div>
+  </div>`;
+}
+async function openSched(force) {
+  if (SC.busy) return;
+  SC.busy = true; renderSched();
+  try { await scLoad(force); SC.msg = ''; } catch (e) { SC.msg = `Couldn't load schedules (${e.message || 'network'}).`; }
+  SC.busy = false; renderSched();
+}
+function scWire() {
+  $('scRefresh').addEventListener('click', () => openSched(true));
+  $('scBody').addEventListener('click', e => {
+    const d = e.target.closest('[data-scday]'); if (d) { SC.day = d.dataset.scday; renderSched(); return; }
+    const t = e.target.closest('[data-scteam]'); if (t) { SC.team = t.dataset.scteam; renderSched(); $('scBody').querySelector('.sc-tbl')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  });
+  $('scBody').addEventListener('change', e => { if (e.target.id === 'scPast') { STORE.scPast = e.target.checked; save(); renderSched(); } });
+}
 function paFromOutlier(o) {
   const mm = o.mm; if (!mm) return null;
   const dd = mm === 'nba_dd'; if (o.side === 'Yes' && !dd) return null;
@@ -5647,7 +5802,7 @@ function bindAnalyzer() {
   $('paGame').addEventListener('change', e => { STORE.pa.game = e.target.value; save(); renderAnalyzer(); });
   $('paSort').addEventListener('change', e => { STORE.pa.sort = e.target.value; save(); renderAnalyzer(); });
   $('paSearch').addEventListener('input', e => { STORE.pa.q = e.target.value; save(); renderAnalyzer(); });
-  tsWire();
+  tsWire(); scWire();
   $('paLoadBtn').addEventListener('click', () => { if (!hasOdds()) { PA.msg = 'Add your Odds API key (Prop outliers) first.'; renderAnalyzer(); return; } openAnalyzer(true); });
   $('paBody').addEventListener('click', e => {
     if (e.target.closest('[data-pareset]')) return;   // (handled at document level)
@@ -6542,6 +6697,7 @@ function bind() {
     if (APP.view === 'first') renderFirst();
     if (APP.view === 'analyzer') { renderAnalyzer(); openAnalyzer(false); }
     if (APP.view === 'testing') openTesting();
+    if (APP.view === 'sched') openSched();
     if (APP.view === 'recap') { renderRecap(); gradeAll(false).then(renderRecap); }
     if (APP.view === 'tracker') { updateGameCloses(); renderTracker(); renderReport(); gradeAll(false); }
     if (APP.view === 'ratings') openRatings();

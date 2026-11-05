@@ -90,3 +90,9 @@ last 5/10/20, minutes near his average, H2H, splits (home/away, won/lost, rest),
 position, points allowed, pace, 3PM and rebounds allowed — this season's ranks, ±5 of tonight's opponent) and
 minimum minutes/FGA/3PA/FTA. Shows hit rate, avg or median, avg diff and diff %, a chart, a splits table,
 similar players vs tonight's opponent (line, result, diff %) and the full matchup panel.
+
+## 📆 Schedules (NBA)
+Every team's season schedule from ESPN (cached 6 hours) with back-to-backs flagged (red = 2nd night, amber =
+1st night), 3-games-in-4-nights stretches and rest days. Pick a day (next 14) to see each game's rest
+situation and ESPN's injury report (Out / Day-To-Day) for both teams; a team schedule table with season and
+remaining B2B counts; and a league overview of remaining back-to-backs. Days are Eastern time.
