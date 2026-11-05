@@ -5572,7 +5572,7 @@ function renderTesting() {
     const qualV = X.avgWk ? Math.max(WK.floor, Math.round(WK.k * X.avgWk)) : WK.floor;
     const avgMap = tsAvgMap(SP, S.mk), me = curG.length ? anAvg(curG.map(g => g.v)) : seasonAvg;
     const band = !bin && me > 0 ? [me * 0.65, me * 1.35] : null;
-    const simAll = pos ? anGames(SP, X.oppId).flatMap(gm => gm.against.filter(l => l.pos === pos && (WK.f(l) || 0) >= qualV && (!band || !(avgMap[l.id]?.n >= 3) || (avgMap[l.id].avg >= band[0] && avgMap[l.id].avg <= band[1])))
+    const simAll = pos ? anGames(SP, X.oppId).flatMap(gm => gm.against.filter(l => l.pos === pos && (WK.f(l) || 0) >= qualV && (!band || !avgMap[l.id] || (avgMap[l.id].avg >= band[0] && avgMap[l.id].avg <= band[1])))
       .map(l => ({ ...l, date: gm.date, teamAbbr: gm.opp, vol: WK.f(l), v: m[2](l), sAvg: avgMap[l.id]?.avg ?? null })).filter(l => Number.isFinite(l.v))) : [];
     if (!pos) sim = '<div class="xs muted">His position is unknown, so there are no comparable players.</div>';
     else {
