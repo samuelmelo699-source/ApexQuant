@@ -134,6 +134,11 @@
   details > summary::-webkit-details-marker { display: none; }
   .slot { display: grid; grid-template-columns: 44px 1fr auto auto; gap: .35rem; align-items: center; padding: .3rem; border: 1px solid var(--line); border-radius: .5rem; background: #080d19; }
   .slot select { min-width: 0; width: 100%; }
+  .ts-chip { border-radius: 999px; padding: .3rem .7rem; font-size: .76rem; background: #111827; border-color: var(--line); }
+  .ts-chip.on { background: #1e3a5f; border-color: var(--sky); color: #fff; }
+  .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: .5rem; overflow: hidden; } .seg button { border: 0; border-radius: 0; background: transparent; } .seg button.on { background: #1e3a5f; color: #fff; }
+  .ts-acc { border-bottom: 1px solid var(--line); padding: .35rem 0; } .ts-acc > summary { cursor: pointer; font-weight: 700; font-size: .85rem; padding: .25rem 0; list-style: none; } .ts-acc > summary::after { content: ' +'; color: var(--muted); } .ts-acc[open] > summary::after { content: ' −'; } .ts-acc > div { padding: .35rem 0; }
+  .ts-tbl td, .ts-tbl th { padding: .2rem .35rem; text-align: left; }
   .an-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .6rem; }
   .an-box table td { padding: .15rem .35rem; } .an-box table td:last-child { text-align: right; }
   .slot input { width: 64px; }
@@ -204,6 +209,7 @@
       <button type="button" data-view="outliers">🔥 Prop outliers</button>
       <button type="button" data-view="first">🥇 First basket</button>
       <button type="button" data-view="analyzer">📈 Prop analyzer</button>
+      <button type="button" data-view="testing">🧪 Testing</button>
       <button type="button" data-view="tracker">📐 Model report</button>
       <button type="button" data-view="audit">🛡️ Roster audit</button>
     </nav>
@@ -474,6 +480,25 @@
       </div>
       <div class="xs" id="paStatus"></div>
       <div id="paBody"></div>
+    </div>
+  </section>
+
+  <section id="view-testing" class="stack hidden">
+    <div class="card stack">
+      <div class="row between" style="flex-wrap:wrap;gap:.5rem">
+        <div>
+          <h2 class="sm xb">🧪 Testing · NBA player props</h2>
+          <p class="note" style="margin:0">Filter a player's games (seasons, sample, splits, opponent-rank bands, minutes and shot volume) and see the hit rate, average or median and diff vs the line, plus similar players against tonight's opponent. Data: ESPN game logs (3 seasons) and this season's box scores.</p>
+        </div>
+        <button type="button" id="tsLoadBtn" class="btn-go">Load lines</button>
+      </div>
+      <nav class="row" id="tsMkts" style="flex-wrap:wrap;gap:.35rem"></nav>
+      <div class="grid xs" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.5rem">
+        <div><label class="muted" for="tsGame">Game</label><select id="tsGame" style="width:100%"></select></div>
+        <div><label class="muted" for="tsPlayer">Player</label><select id="tsPlayer" style="width:100%"></select></div>
+      </div>
+      <div class="xs" id="tsStatus"></div>
+      <div id="tsBody"></div>
     </div>
   </section>
 
@@ -2338,8 +2363,8 @@ function renderChrome() {
   const props = SPORTS[APP.sport].props;
   document.querySelectorAll('[data-needs-props]').forEach(b => b.classList.toggle('hidden', !props));
   $('tdTabBtn').textContent = { NBA: '20+ points', NHL: 'Anytime goal',}[APP.sport] || 'Anytime TD';
-  $('tickerCard').classList.toggle('hidden', ['outliers', 'first', 'recap', 'tracker', 'ratings'].includes(APP.view));
-  for (const v of ['sim', 'slate', 'recap', 'props', 'ratings', 'outliers', 'first', 'analyzer', 'tracker', 'audit']) $(`view-${v}`).classList.toggle('hidden', v !== APP.view);
+  $('tickerCard').classList.toggle('hidden', ['outliers', 'first', 'recap', 'tracker', 'ratings', 'testing'].includes(APP.view));
+  for (const v of ['sim', 'slate', 'recap', 'props', 'ratings', 'outliers', 'first', 'analyzer', 'testing', 'tracker', 'audit']) $(`view-${v}`).classList.toggle('hidden', v !== APP.view);
   $('td30TabBtn').classList.toggle('hidden', APP.sport !== 'NBA');
   if (APP.tab === 'td30' && APP.sport !== 'NBA') APP.tab = 'summary';
   for (const t of ['summary', 'props', 'td', 'td30', 'roster']) $(`tab-${t}`).classList.toggle('hidden', t !== APP.tab);
@@ -4951,6 +4976,7 @@ let paResizeT = null;
 window.addEventListener('resize', () => { clearTimeout(paResizeT); paResizeT = setTimeout(() => {
   if (APP.view === 'analyzer' && PA.open) renderAnalyzer();
   if (APP.view === 'outliers' && OL.chart) renderOutliers();
+  if (APP.view === 'testing') renderTesting();
 }, 250); });
 // reset-to-line works on any page: re-draw that panel in place
 document.addEventListener('click', e => {
@@ -5131,7 +5157,7 @@ function anCompute(r) {
   const avail = parts.filter(p => p.v !== null), wSum = avail.reduce((a, p) => a + p.w, 0);
   const over = wSum ? Math.round(avail.reduce((a, p) => a + p.w * p.v, 0) / wSum) : null;
   const conf = !wSum ? 'None' : wSum >= 90 && og.length >= (sp === 'NFL' ? 6 : 8) && qAll.length >= 12 ? 'High' : wSum >= 65 && og.length >= 4 ? 'Medium' : 'Low';
-  return { sp, P, ev, oppId, oppAbbr, pos, pn, mm, bin, side, line, V, qualVol, og, T, PO, qualAvg, qN: qAll.length, oppHit, examples, h2hG, h2hR, vals, pl10, plSeason: rate(vals),
+  return { sp, P, ev, oppId, oppAbbr, pos, pn, mm, bin, side, line, V, qualVol, og, T, PO, qualAvg, qN: qAll.length, oppHit, examples, all: qAll, h2hG, h2hR, vals, pl10, plSeason: rate(vals),
     pAvg: vals.length ? anAvg(vals.slice(0, 10)) : null, league, lg: { team: lgAvg('team'), pos: lgAvg('pos'), qual: lgAvg('qual') },
     rank: { team: rankOf('team', T.season), pos: rankOf('pos', PO.season), qual: rankOf('qual', qualAvg) }, paceR, minR, mrow, parts, over, conf, wSum, last: og[0]?.date || null };
 }
@@ -5258,6 +5284,241 @@ async function anOpen(id) {
   } catch (e) { AN.res.set(id, { err: `Couldn't load the matchup data (${e.message || 'network'}). Try again.` }); }
   if (AN.open === id) anPaint();
 }
+/* =====================================================================
+   🧪 TESTING — player prop explorer (NBA): filter the player's game log (seasons, sample, splits,
+   opponent-rank bands, player-stat minimums) and see the hit rate, avg/median, diff vs the line,
+   similar players vs tonight's opponent and the full matchup panel. All data: ESPN game logs + box scores.
+   ===================================================================== */
+const TS = { busy: false, msg: '', loaded: false, page: 0, cw: 0, acc: new Set(['season']) };
+const tsAcc = k => `class="ts-acc" data-acc="${k}" ${TS.acc.has(k) ? 'open' : ''}`;
+const TS_MK = [
+  ['pts', 'Points', l => l.pts, 'nba_pts'], ['reb', 'Rebounds', l => l.reb, 'nba_reb'], ['ast', 'Assists', l => l.ast, 'nba_ast'], ['tpm', 'Threes', l => l.tpm, 'nba_3pm'],
+  ['pra', 'Pts+Reb+Ast', l => l.pts + l.reb + l.ast, 'nba_pra'], ['pr', 'Pts+Reb', l => l.pts + l.reb, 'nba_pr'], ['pa', 'Pts+Ast', l => l.pts + l.ast, 'nba_pa'], ['ra', 'Reb+Ast', l => l.reb + l.ast, 'nba_ra'],
+  ['blk', 'Blocks', l => l.blk, 'nba_blk'], ['stl', 'Steals', l => l.stl, 'nba_stl'], ['sb', 'Stl+Blk', l => l.stl + l.blk, null], ['to', 'Turnovers', l => l.to, null],
+  ['fta', 'FT Attempted', l => l.fta, null], ['fga', 'FG Attempted', l => l.fga, null], ['tpa', '3PT Attempted', l => l.tpa, null],
+  ['dd', 'Double Double', l => ['pts', 'reb', 'ast', 'blk', 'stl'].filter(k => l[k] >= 10).length >= 2 ? 1 : 0, 'nba_dd'], ['td', 'Triple Double', l => ['pts', 'reb', 'ast', 'blk', 'stl'].filter(k => l[k] >= 10).length >= 3 ? 1 : 0, null]];
+const tsMk = k => TS_MK.find(m => m[0] === k) || TS_MK[0];
+const tsBin = k => k === 'dd' || k === 'td';
+// box-score value of a market for an opposing player line (for defense ranks); markets the box doesn't carry fall back to points
+const tsBoxVal = (k, l) => { const m = tsMk(k); return ['to', 'fta', 'fga', 'tpa'].includes(k) ? l.pts : m[2]({ ...l, to: 0, fta: 0, fga: 0, tpa: 0 }); };
+const tsSeasonOf = d => { const x = new Date(d), y = x.getMonth() >= 8 ? x.getFullYear() : x.getFullYear() - 1; return `${String(y % 100).padStart(2, '0')}/${String((y + 1) % 100).padStart(2, '0')}`; };
+const tsCurSeason = () => tsSeasonOf(new Date());
+const tsF = () => (STORE.ts ||= { game: '', pid: '', mk: 'pts', side: 'O', line: null, ft: 'sug', mode: 'avg', f: {} });
+function tsLine(g) {
+  const f = k => statFrom(g.names, g.stats, k) ?? 0;
+  return { date: g.date, opp: g.opp, oppId: g.oppId, home: g.home, res: String(g.res || '').charAt(0).toUpperCase(), season: tsSeasonOf(g.date),
+    min: f(['minutes']), pts: f(['points']), reb: f(['totalRebounds', 'rebounds']), ast: f(['assists']), tpm: f(['threePointFieldGoalsMade']), tpa: f(['threePointFieldGoalsAttempted']),
+    fgm: f(['fieldGoalsMade']), fga: f(['fieldGoalsAttempted']), fta: f(['freeThrowsAttempted']), blk: f(['blocks']), stl: f(['steals']), to: f(['turnovers']), pf: f(['fouls']) };
+}
+// every game in the last 3 seasons with rest days
+function tsGames(pid) {
+  const seen = new Set(), all = [];
+  for (const g of [...(REG.logs[`NBA:${pid}`]?.games || []), ...(AN.h2h[`NBA:${pid}`] || [])]) { const k = g.date + g.oppId; if (seen.has(k) || !g.date) continue; seen.add(k); const l = tsLine(g); if (l.min > 0) all.push(l); }
+  all.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  for (let i = 0; i < all.length; i++) { const nx = all[i + 1]; all[i].rest = nx ? Math.round((new Date(all[i].date) - new Date(nx.date)) / 864e5) - 1 : null; }
+  return all;
+}
+// this season's opponent ranks (1 = allows the fewest) from every team's box scores
+function tsRanks(k, pos) {
+  const rows = anTeams('NBA').map(tid => { const gs = anGames('NBA', tid); if (gs.length < 3) return null;
+    const per = f => anAvg(gs.map(gm => gm.against.filter(f).reduce((a, l) => a + tsBoxVal(k, l), 0)));
+    return { tid, dvp: pos ? per(l => l.pos === pos) : per(() => true), pts: anAvg(gs.map(gm => gm.against.reduce((a, l) => a + l.pts, 0))), pace: anAvg(gs.map(g => g.total)), tpm: anAvg(gs.map(gm => gm.against.reduce((a, l) => a + l.tpm, 0))), reb: anAvg(gs.map(gm => gm.against.reduce((a, l) => a + l.reb, 0))) };
+  }).filter(Boolean);
+  const out = {};
+  for (const key of ['dvp', 'pts', 'pace', 'tpm', 'reb']) { const xs = rows.map(r => r[key]).sort((a, b) => a - b); out[key] = Object.fromEntries(rows.map(r => [r.tid, { r: xs.filter(x => x < r[key] - 1e-9).length + 1, v: r[key], of: rows.length }])); }
+  return out;
+}
+const TS_RK = [['dvp', 'Def vs Position'], ['pts', 'Opp Pts Allowed'], ['pace', 'Opp Pace'], ['tpm', 'Opp 3PM Allowed'], ['reb', 'Opp Reb Allowed']];
+function tsFilter(G, X) {
+  const f = tsF().f, cur = tsCurSeason(), seasons = f.seasons?.length ? f.seasons : [cur];
+  let gs = G.filter(g => seasons.includes(g.season));
+  if (f.h2h) gs = gs.filter(g => g.oppId === X.oppId);
+  if (f.home) gs = gs.filter(g => f.home === 'home' ? g.home === true : g.home === false);
+  if (f.res) gs = gs.filter(g => g.res === f.res);
+  if (f.rest !== undefined && f.rest !== null && f.rest !== '') gs = gs.filter(g => g.rest !== null && (f.rest === '2' ? g.rest >= 2 : String(g.rest) === f.rest));
+  if (f.minutes && X.avgMin) gs = gs.filter(g => g.min >= X.avgMin - 4);
+  for (const [k, key] of [['minMin', 'min'], ['minFga', 'fga'], ['min3pa', 'tpa'], ['minFta', 'fta']]) if (f[k] > 0) gs = gs.filter(g => g[key] >= f[k]);
+  for (const [key] of TS_RK) if (f['rk_' + key] && X.ranks?.[key]?.[X.oppId]) { const me = X.ranks[key][X.oppId].r; gs = gs.filter(g => { const o = X.ranks[key][g.oppId]; return o && Math.abs(o.r - me) <= 5; }); }
+  const n = f.sample === 'max' || !f.sample ? gs.length : +f.sample;
+  return gs.slice(0, n);
+}
+const tsMed = xs => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+function tsStats(vals, line, side, bin) {
+  const hit = v => bin ? v >= 1 : side === 'U' ? v < line : v > line, g = vals.filter(v => bin || v !== line);
+  const avg = anAvg(vals), med = tsMed(vals);
+  return { n: vals.length, h: g.filter(hit).length, gn: g.length, avg, med, diff: bin || avg === null ? null : avg - line, diffP: bin || avg === null || !line ? null : (avg - line) / line };
+}
+function tsCtx() {
+  const S = tsF(), evs = [...REG.events.values()].filter(e => e.sport === 'NBA' && e.state === 'pre').sort((a, b) => new Date(a.start) - new Date(b.start));
+  const ev = evs.find(e => e.eventId === S.game) || evs[0]; if (!ev) return { evs };
+  const players = [...REG.players.values()].filter(p => p.sport === 'NBA' && (String(p.teamId) === String(ev.homeTeamId) || String(p.teamId) === String(ev.awayTeamId)));
+  const sim = APP.simCache.get(`NBA:${ev.eventId}`), m = tsMk(S.mk);
+  const rowOf = pid => sim?.players?.find(r => String(r.playerId) === String(pid) && r.market === (m[3] || 'nba_pts'));
+  players.sort((a, b) => (rowOf(b.playerId)?.mean ?? -1) - (rowOf(a.playerId)?.mean ?? -1) || a.playerName.localeCompare(b.playerName));
+  const P = players.find(p => p.playerId === S.pid) || players[0];
+  if (!P) return { evs, ev, players };
+  const home = String(ev.homeTeamId) === String(P.teamId), row = m[3] ? rowOf(P.playerId) : null;
+  const book = row ? STORE.propBook[row.id] : null;
+  return { evs, ev, players, P, home, oppId: String(home ? ev.awayTeamId : ev.homeTeamId), oppAbbr: home ? ev.awayAbbr : ev.homeAbbr, teamAbbr: home ? ev.homeAbbr : ev.awayAbbr, row, book, m, sim };
+}
+function tsChart(gs, line, side, bin) {
+  const games = [...gs].reverse(), n = games.length; if (!n) return '<div class="xs muted" style="padding:1rem 0">No games match these filters.</div>';
+  const vals = games.map(g => g.v), avg = anAvg(vals);
+  const W = Math.max(n * 28 + 40, Math.min(Math.max(300, (TS.cw || 700) - 30), 1100)), H = 210, top = 18, base = 165, maxV = Math.max(...vals, bin ? 1 : line, avg) * 1.12 || 1;
+  const y = v => base - v / maxV * (base - top), bw = Math.min(34, (W - 40) / n - 6);
+  const hit = v => bin ? v >= 1 : side === 'U' ? v < line : v > line;
+  return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:${Math.min(W, n * 28 + 40)}px;max-width:${W}px;height:auto;color:currentColor" role="img" aria-label="Game log vs line">
+    <line x1="24" x2="${W - 6}" y1="${base}" y2="${base}" stroke="var(--muted)" stroke-width=".5"/>
+    ${games.map((g, i) => { const cx = 30 + i * ((W - 40) / n) + (W - 40) / n / 2, v = g.v, col = !bin && v === line ? 'var(--muted)' : hit(v) ? 'var(--green)' : 'var(--rose)', hh = bin ? (v ? base - top : 4) : Math.max(1, base - y(v));
+      return `<g><title>${esc(new Date(g.date).toLocaleDateString())} ${g.home ? 'vs' : '@'} ${esc(g.opp)} · ${Math.round(g.min)} min · ${bin ? (v ? 'Yes' : 'No') : fmtN(v)}</title><rect x="${(cx - bw / 2).toFixed(1)}" y="${(base - hh).toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="3" fill="${col}" opacity=".9"/>
+      <text x="${cx.toFixed(1)}" y="${(base - hh - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="currentColor">${bin ? (v ? 'Y' : 'N') : fmtN(v)}</text>
+      <text x="${cx.toFixed(1)}" y="${base + 13}" text-anchor="middle" font-size="9" fill="var(--muted)">${g.home ? '' : '@'}${esc(String(g.opp).slice(0, 4))}</text>
+      <text x="${cx.toFixed(1)}" y="${base + 25}" text-anchor="middle" font-size="8" fill="var(--muted)">${esc(new Date(g.date).toLocaleDateString([], { month: 'numeric', day: 'numeric' }))}</text>
+      <text x="${cx.toFixed(1)}" y="${base + 36}" text-anchor="middle" font-size="8" fill="var(--muted)">${Math.round(g.min)}m</text></g>`; }).join('')}
+    ${bin ? '' : `<line x1="24" x2="${W - 6}" y1="${y(line).toFixed(1)}" y2="${y(line).toFixed(1)}" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="2" y="${(y(line) + 3).toFixed(1)}" font-size="10" fill="var(--amber)">${fmtN(line)}</text>
+    <line x1="24" x2="${W - 6}" y1="${y(avg).toFixed(1)}" y2="${y(avg).toFixed(1)}" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2 3"/>`}
+  </svg></div>`;
+}
+const tsChip = (key, lab, on, extra = '') => `<button type="button" class="ts-chip ${on ? 'on' : ''}" data-tsf="${esc(key)}">${lab}${extra}</button>`;
+function tsRankTag(rk, side) { if (!rk) return ''; const s = rk.r / rk.of, good = side === 'U' ? s <= 0.34 : s > 0.66, bad = side === 'U' ? s > 0.66 : s <= 0.34; return ` <b class="${good ? 'green' : bad ? 'rose' : ''}">#${rk.r}</b>`; }
+function renderTesting() {
+  const S = tsF(), box = $('tsBody'); if (!box) return;
+  if (box.clientWidth) TS.cw = box.clientWidth;   // draw the chart at the real width (phones)
+  $('tsMkts').innerHTML = TS_MK.map(m => `<button type="button" class="ts-chip ${S.mk === m[0] ? 'on' : ''}" data-tsmk="${m[0]}">${m[1]}</button>`).join('');
+  const X = tsCtx();
+  $('tsGame').innerHTML = (X.evs || []).map(e => `<option value="${esc(e.eventId)}" ${X.ev?.eventId === e.eventId ? 'selected' : ''}>${esc(e.awayAbbr)} @ ${esc(e.homeAbbr)} · ${esc(new Date(e.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</option>`).join('') || '<option>No upcoming NBA games loaded</option>';
+  $('tsPlayer').innerHTML = (X.players || []).map(p => `<option value="${esc(p.playerId)}" ${X.P?.playerId === p.playerId ? 'selected' : ''}>${esc(p.playerName)} · ${esc(String(p.teamId) === String(X.ev.homeTeamId) ? X.ev.homeAbbr : X.ev.awayAbbr)}${p.group ? ' · ' + esc(p.group) : ''}</option>`).join('');
+  $('tsStatus').innerHTML = TS.busy || TS.msg ? `<span class="${TS.busy ? 'muted' : 'amber'}">${esc(TS.msg)}</span>` : '';
+  if (!X.P) { box.innerHTML = TS.busy ? '' : '<div class="xs muted">Pick a game. If the list is empty, there are no upcoming NBA games loaded yet.</div>'; return; }
+  const k = `NBA:${X.P.playerId}`, G = tsGames(X.P.playerId);
+  if (!REG.logs[k] || !AN.h2h[k]) { box.innerHTML = '<div class="xs muted">Loading his game logs…</div>'; tsLoadPlayer(X.P.playerId); return; }
+  const m = X.m, bin = tsBin(S.mk), cur = tsCurSeason();
+  for (const g of G) g.v = m[2](g);
+  const curG = G.filter(g => g.season === cur);
+  X.avgMin = anAvg(curG.slice(0, 10).map(g => g.min)) ?? anAvg(G.slice(0, 10).map(g => g.min));
+  const pos = ['G', 'F', 'C'].includes(X.P.group) ? X.P.group : null;
+  X.ranks = TS.leagueReady ? tsRanks(S.mk, pos) : null;
+  // line: the books' line (Load lines), else what you typed, else the season average rounded to .5
+  const bookLine = X.book?.line ?? null, seasonAvg = anAvg((curG.length ? curG : G).map(g => g.v));
+  const defLine = bookLine ?? (seasonAvg === null ? 0.5 : Math.max(0.5, Math.floor(seasonAvg) + 0.5));
+  const lineKey = `${X.P.playerId}|${S.mk}`; if (S.lineKey !== lineKey) { S.lineKey = lineKey; S.line = null; }
+  const line = bin ? 0.5 : (S.line ?? defLine), side = bin ? 'O' : S.side;
+  const gs = tsFilter(G, X), st = tsStats(gs.map(g => g.v), line, side, bin), f = S.f, seasons = f.seasons?.length ? f.seasons : [cur];
+  const allSeasons = [...new Set([cur, ...G.map(g => g.season)])].sort().reverse().slice(0, 3);
+  const rk = key => X.ranks?.[key]?.[X.oppId] || null;
+  const mid = S.mode === 'med' ? st.med : st.avg;
+  const tile = (lab, val, cls = '') => `<div class="inset" style="padding:.5rem;text-align:center"><div class="xs muted">${lab}</div><div class="lg xb mono ${cls}">${val}</div></div>`;
+  const hr = st.gn ? st.h / st.gn : null, hrCls = hr === null ? 'muted' : hr >= 0.6 ? 'green' : hr <= 0.4 ? 'rose' : 'amber';
+  const sug = `<div class="row" style="flex-wrap:wrap;gap:.35rem">
+      ${tsChip('season:cur', `${cur} only`, seasons.length === 1 && seasons[0] === cur)}${tsChip('season:l3', 'L3 Seasons', seasons.length >= Math.min(3, allSeasons.length) && allSeasons.length > 1)}
+      ${['5', '10', '20'].map(n => tsChip('sample:' + n, 'L' + n, f.sample === n)).join('')}${tsChip('sample:max', `Max (${G.filter(g => seasons.includes(g.season)).length})`, !f.sample || f.sample === 'max')}
+      ${tsChip('minutes', `Minutes ${X.avgMin ? Math.round(X.avgMin - 4) + '+' : ''}`, f.minutes)}${tsChip('h2h', `H2H vs ${esc(X.oppAbbr)}`, f.h2h)}
+      ${TS_RK.map(([key, lab]) => tsChip('rk_' + key, key === 'dvp' ? `Def vs Position (${esc(m[1])})` : lab, f['rk_' + key], X.ranks ? tsRankTag(rk(key), side) : '')).join('')}
+    </div>${X.ranks ? '' : '<div class="xs muted">Opponent ranks appear once this season\'s box scores finish loading.</div>'}`;
+  const num = (key, lab) => `<label class="xs">${lab} ≥ <input type="number" min="0" step="1" data-tsnum="${key}" value="${f[key] ?? ''}" style="width:4.2rem"></label>`;
+  const all = `<div class="stack" style="gap:.25rem">
+      <details ${tsAcc('season')}><summary>Season &amp; Games</summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${allSeasons.map(s => tsChip('seasonT:' + s, s, seasons.includes(s))).join('')}<span class="muted xs">·</span>${['5', '10', '20'].map(n => tsChip('sample:' + n, 'Last ' + n, f.sample === n)).join('')}${tsChip('sample:max', 'All', !f.sample || f.sample === 'max')}${tsChip('h2h', 'Only vs ' + esc(X.oppAbbr), f.h2h)}</div></details>
+      <details ${tsAcc('splits')}><summary>Splits</summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${tsChip('home:home', 'Home', f.home === 'home')}${tsChip('home:away', 'Away', f.home === 'away')}<span class="muted xs">·</span>${tsChip('res:W', 'Team won', f.res === 'W')}${tsChip('res:L', 'Team lost', f.res === 'L')}<span class="muted xs">·</span>${tsChip('rest:0', 'Back-to-back', f.rest === '0')}${tsChip('rest:1', '1 day rest', f.rest === '1')}${tsChip('rest:2', '2+ days rest', f.rest === '2')}</div></details>
+      <details ${tsAcc('opp')}><summary>Opponent Rankings <span class="muted">(games vs teams ranked within ±5 of ${esc(X.oppAbbr)}; ranks are this season's, 1 = allows fewest)</span></summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${TS_RK.map(([key, lab]) => tsChip('rk_' + key, key === 'dvp' ? `Def vs ${pos ? AN_SP.NBA.pos[pos] + 's' : 'position'} (${esc(m[1])})` : lab, f['rk_' + key], X.ranks ? tsRankTag(rk(key), side) : '')).join('')}</div></details>
+      <details ${tsAcc('stats')}><summary>Player Stats</summary><div class="row" style="flex-wrap:wrap;gap:.6rem;align-items:center">${tsChip('minutes', 'Minutes near his average', f.minutes)}${num('minMin', 'Min')}${num('minFga', 'FGA')}${num('min3pa', '3PA')}${num('minFta', 'FTA')}</div></details>
+    </div>`;
+  const nActive = Object.entries(f).filter(([k2, v]) => v && !(k2 === 'seasons' && v.length === 1 && v[0] === cur) && !(k2 === 'sample' && v === 'max')).length;
+  // splits table (same seasons as the filter)
+  const base = G.filter(g => seasons.includes(g.season));
+  const splitRow = (lab, xs) => { const s2 = tsStats(xs.map(g => g.v), line, side, bin); return `<tr><td>${lab}</td><td class="mono">${s2.n}</td><td class="mono">${s2.n ? (bin ? pct(s2.avg) : anF(S.mode === 'med' ? s2.med : s2.avg)) : '—'}</td><td class="mono ${s2.gn ? (s2.h / s2.gn >= 0.6 ? 'green' : s2.h / s2.gn <= 0.4 ? 'rose' : '') : 'muted'}">${s2.gn ? `${s2.h}/${s2.gn} (${Math.round(s2.h / s2.gn * 100)}%)` : '—'}</td></tr>`; };
+  const tierOf = g => { const o = X.ranks?.dvp?.[g.oppId]; return o ? (o.r <= 10 ? 'top' : o.r > o.of - 10 ? 'bot' : 'mid') : null; };
+  const splits = `<table class="xs ts-tbl"><thead><tr><th>Split</th><th>G</th><th>${S.mode === 'med' ? 'Med' : 'Avg'}</th><th>Hit</th></tr></thead><tbody>
+    ${splitRow('All', base)}${splitRow('Last 5', base.slice(0, 5))}${splitRow('Last 10', base.slice(0, 10))}${splitRow('Home', base.filter(g => g.home === true))}${splitRow('Away', base.filter(g => g.home === false))}
+    ${splitRow('Team won', base.filter(g => g.res === 'W'))}${splitRow('Team lost', base.filter(g => g.res === 'L'))}${splitRow('Back-to-back', base.filter(g => g.rest === 0))}${splitRow('2+ days rest', base.filter(g => g.rest >= 2))}
+    ${X.ranks ? splitRow('vs top-10 D (this stat/pos)', base.filter(g => tierOf(g) === 'top')) + splitRow('vs bottom-10 D', base.filter(g => tierOf(g) === 'bot')) : ''}${splitRow('vs ' + esc(X.oppAbbr), base.filter(g => g.oppId === X.oppId))}</tbody></table>`;
+  // similar players vs tonight's opponent (from the Analyze engine)
+  let sim = '<div class="xs muted">Loading this season\'s box scores…</div>', matchup = '';
+  if (TS.leagueReady && m[3]) {
+    const A = anCompute({ sport: 'NBA', player: X.P.playerName, pid: X.P.playerId, mm: m[3], side, line, start: X.ev.start });
+    if (A.err) sim = `<div class="xs amber">${esc(A.err)}</div>`;
+    else {
+      const rows = A.all.map(l => ({ ...l, diff: bin ? null : l.v - line, ok: bin ? l.v >= 1 : l.v === line ? null : side === 'U' ? l.v < line : l.v > line }));
+      const graded = rows.filter(r => r.ok !== null), per = 10, pages = Math.max(1, Math.ceil(rows.length / per)); TS.page = Math.min(TS.page, pages - 1);
+      const ad = bin ? null : anAvg(rows.map(r => r.diff));
+      sim = `<div class="grid" style="grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:.5rem">${tile('AVG DIFF', ad === null ? '—' : (ad > 0 ? '+' : '') + anF(ad), ad === null ? 'muted' : (side === 'U' ? ad < 0 : ad > 0) ? 'green' : 'rose')}${tile('AVG DIFF %', ad === null || !line ? '—' : (ad > 0 ? '+' : '') + anF(ad / line * 100, 0) + '%', ad === null ? 'muted' : (side === 'U' ? ad < 0 : ad > 0) ? 'green' : 'rose')}${tile('HIT RATE', graded.length ? `${Math.round(graded.filter(r => r.ok).length / graded.length * 100)}%` : '—', graded.length ? (graded.filter(r => r.ok).length / graded.length >= 0.6 ? 'green' : graded.filter(r => r.ok).length / graded.length <= 0.4 ? 'rose' : 'amber') : 'muted')}</div>
+        <div class="xs muted" style="margin-bottom:.3rem">${esc(A.pn[0].toUpperCase() + A.pn.slice(1))} who played ${A.qualVol}+ min against ${esc(X.oppAbbr)} this season (${rows.length} player-games)</div>
+        ${rows.length ? `<div class="table-wrap"><table class="xs ts-tbl"><thead><tr><th>Date</th><th>Team</th><th>Player</th><th>Line</th><th>Result</th><th>Diff %</th></tr></thead><tbody>${rows.slice(TS.page * per, TS.page * per + per).map(r => `<tr><td class="mono">${esc(new Date(r.date).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</td><td>${esc(r.teamAbbr)}</td><td>${esc(r.name)}</td><td class="mono">${bin ? 'Yes' : fmtN(line)}</td><td class="mono ${r.ok === null ? 'muted' : r.ok ? 'green' : 'rose'}">${bin ? (r.v ? 'Yes' : 'No') : fmtN(r.v)}</td><td class="mono ${r.ok === null ? 'muted' : r.ok ? 'green' : 'rose'}">${bin || !line ? '—' : (r.diff > 0 ? '+' : '') + Math.round(r.diff / line * 100) + '%'}</td></tr>`).join('')}</tbody></table></div>
+          <div class="row" style="justify-content:center;gap:.5rem;margin-top:.35rem"><button type="button" class="xs" data-tspage="-1" ${TS.page ? '' : 'disabled'}>‹</button><span class="xs muted">${TS.page + 1} / ${pages}</span><button type="button" class="xs" data-tspage="1" ${TS.page < pages - 1 ? '' : 'disabled'}>›</button></div>` : '<div class="xs muted">Insufficient data</div>'}`;
+      matchup = `<details ${tsAcc('matchup')}><summary>🔍 Full matchup analysis vs ${esc(X.oppAbbr)} (defense, position, score)</summary>${anHtml(A).replace(/<button type="button" class="xs" data-olanclose>Close ✕<\/button>/, '')}</details>`;
+    }
+  } else if (!m[3]) sim = `<div class="xs muted">Similar-player comparison isn't available for ${esc(m[1])} (box scores don't carry it). Pick Points, Rebounds, Assists, Threes, a combo, Blocks, Steals or Double Double.</div>`;
+  box.innerHTML = `<div class="stack" style="gap:.7rem">
+    <div class="row between" style="flex-wrap:wrap;gap:.5rem;align-items:flex-end">
+      <div><div class="lg xb">${esc(X.P.playerName)} <span class="muted xs">${esc(X.teamAbbr)} ${X.home ? 'vs' : '@'} ${esc(X.oppAbbr)}${pos ? ' · ' + AN_SP.NBA.pos[pos] : ''}</span></div>
+        <div class="xs muted">${esc(m[1])}${bookLine !== null ? ` · books' line <b class="mono">${fmtN(bookLine)}</b>` : ' · no books\' line loaded (press Load lines, or set your own)'}${X.row?.mean > 0 ? ` · model projection <b class="mono sky">${anF(X.row.mean)}</b>` : ''}</div></div>
+      ${bin ? '' : `<div class="row" style="gap:.4rem;align-items:center"><span class="seg"><button type="button" class="${side === 'O' ? 'on' : ''}" data-tsside="O">Over</button><button type="button" class="${side === 'U' ? 'on' : ''}" data-tsside="U">Under</button></span>
+        <button type="button" class="xs" data-tsstep="-1">−</button><input id="tsLine" type="number" step="0.5" value="${line}" style="width:4.8rem" aria-label="Line"><button type="button" class="xs" data-tsstep="1">+</button>${S.line !== null && bookLine !== null ? '<button type="button" class="xs" data-tsreset>Book line</button>' : ''}</div>`}
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:.5rem">
+      ${tile('HIT RATE', hr === null ? '—' : `${Math.round(hr * 100)}%`, hrCls)}${tile(bin ? 'HITS' : 'HIT / GAMES', `${st.h}/${st.gn}`)}${tile(bin ? 'RATE' : S.mode === 'med' ? 'MEDIAN' : 'AVERAGE', mid === null ? '—' : bin ? pct(mid) : anF(mid))}
+      ${bin ? '' : tile('AVG DIFF', st.diff === null ? '—' : (st.diff > 0 ? '+' : '') + anF(st.diff), st.diff === null ? 'muted' : (side === 'U' ? st.diff < 0 : st.diff > 0) ? 'green' : 'rose') + tile('AVG DIFF %', st.diffP === null ? '—' : (st.diffP > 0 ? '+' : '') + anF(st.diffP * 100, 0) + '%', st.diffP === null ? 'muted' : (side === 'U' ? st.diffP < 0 : st.diffP > 0) ? 'green' : 'rose')}
+    </div>
+    <div class="inset"><div class="row between" style="flex-wrap:wrap;gap:.4rem;margin-bottom:.3rem"><div class="xs b sky">Game log · ${st.n} game${st.n === 1 ? '' : 's'} ${nActive ? `<span class="amber">(${nActive} filter${nActive === 1 ? '' : 's'} on)</span>` : ''}</div><div class="xs muted">${bin ? 'green = yes' : 'green = hit · amber dashed = line · blue dotted = average'}</div></div>${tsChart(gs, line, side, bin)}</div>
+    <div class="inset stack" style="gap:.5rem">
+      <div class="row between" style="gap:.4rem"><span class="seg"><button type="button" class="${S.ft === 'sug' ? 'on' : ''}" data-tsft="sug">Suggested</button><button type="button" class="${S.ft === 'all' ? 'on' : ''}" data-tsft="all">All Filters</button></span>
+        <div class="row" style="gap:.4rem;align-items:center"><span class="xs muted">Mode</span><span class="seg"><button type="button" class="${S.mode !== 'med' ? 'on' : ''}" data-tsmode="avg">Avg</button><button type="button" class="${S.mode === 'med' ? 'on' : ''}" data-tsmode="med">Med</button></span>${nActive ? '<button type="button" class="xs" data-tsclear>Clear filters</button>' : ''}</div></div>
+      ${S.ft === 'all' ? all : sug}
+    </div>
+    <div class="an-grid">
+      <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">Splits ${bin ? '' : `vs ${side === 'U' ? 'Under' : 'Over'} ${fmtN(line)}`} <span class="muted">(${seasons.join(', ')})</span></div>${splits}</div>
+      <div class="inset"><div class="xs b sky" style="margin-bottom:.3rem">Similar players vs ${esc(X.oppAbbr)}</div>${sim}</div>
+    </div>
+    ${matchup}
+  </div>`;
+  TS.cw = box.clientWidth || TS.cw;
+}
+async function tsLoadPlayer(pid) {
+  if (TS.loadingPid === pid) return; TS.loadingPid = pid;
+  try { await anEnsureLogs('NBA', pid); } catch {}
+  TS.loadingPid = null; if (APP.view === 'testing') renderTesting();
+}
+async function openTesting() {
+  if (TS.busy) return renderTesting();
+  TS.busy = true; TS.msg = 'Loading NBA games and rosters…'; renderTesting();
+  try {
+    if (APP.sport !== 'NBA') { APP.sport = 'NBA'; APP.eventId = null; APP.simCache.clear(); renderChrome(); await syncSport(false, true); }
+    await preloadSlate(); refreshAllSims(); renderTesting();
+    if (!TS.leagueReady) { const tick = setInterval(() => { TS.msg = AN.msg || 'Loading this season\'s box scores…'; $('tsStatus').innerHTML = `<span class="muted">${esc(TS.msg)}</span>`; }, 700);
+      try { await anEnsureLeague('NBA'); TS.leagueReady = true; } finally { clearInterval(tick); } }
+    TS.msg = '';
+  } catch (e) { TS.msg = e.message || 'Load failed'; }
+  TS.busy = false; renderTesting();
+}
+function tsWire() {
+  const S = tsF(), rer = () => { save(); renderTesting(); };
+  $('tsMkts').addEventListener('click', e => { const b = e.target.closest('[data-tsmk]'); if (!b) return; S.mk = b.dataset.tsmk; TS.page = 0; rer(); });
+  $('tsGame').addEventListener('change', e => { S.game = e.target.value; S.pid = ''; TS.page = 0; rer(); });
+  $('tsPlayer').addEventListener('change', e => { S.pid = e.target.value; TS.page = 0; rer(); });
+  $('tsLoadBtn').addEventListener('click', async () => { if (!hasOdds()) { TS.msg = 'Add your Odds API key (Prop outliers) first.'; renderTesting(); return; } TS.msg = 'Loading sportsbook lines…'; TS.busy = true; renderTesting(); try { await autoFillLines('NBA', false); refreshAllSims(); TS.msg = ''; } catch (e) { TS.msg = e.message; } TS.busy = false; renderTesting(); });
+  $('tsBody').addEventListener('click', e => {
+    const t = e.target.closest('button'); if (!t) return; const d = t.dataset, f = S.f;
+    if (d.tsside) { S.side = d.tsside; rer(); return; }
+    if (d.tsstep) { const L = +($('tsLine').value || 0.5) + 0.5 * (+d.tsstep); S.line = Math.max(0, L); rer(); return; }
+    if ('tsreset' in d) { S.line = null; rer(); return; }
+    if (d.tsft) { S.ft = d.tsft; rer(); return; }
+    if (d.tsmode) { S.mode = d.tsmode; rer(); return; }
+    if ('tsclear' in d) { S.f = {}; rer(); return; }
+    if (d.tspage) { TS.page += +d.tspage; renderTesting(); return; }
+    if (!d.tsf) return;
+    const [key, val] = d.tsf.split(':'), cur = tsCurSeason();
+    if (key === 'season') f.seasons = val === 'cur' ? [cur] : [...new Set(tsGames(tsCtx().P?.playerId || '').map(g => g.season).concat(cur))].sort().reverse().slice(0, 3);
+    else if (key === 'seasonT') { const s = new Set(f.seasons?.length ? f.seasons : [cur]); s.has(val) ? s.delete(val) : s.add(val); f.seasons = s.size ? [...s] : [cur]; }
+    else if (['sample', 'home', 'res', 'rest'].includes(key)) f[key] = f[key] === val ? null : val;
+    else f[key] = !f[key];
+    TS.page = 0; rer();
+  });
+  $('tsBody').addEventListener('toggle', e => { const k = e.target.dataset?.acc; if (k) e.target.open ? TS.acc.add(k) : TS.acc.delete(k); }, true);
+  $('tsBody').addEventListener('change', e => {
+    // re-render after the event finishes (a blur-triggered change must not replace the node mid-event)
+    if (e.target.id === 'tsLine') { const v = num(e.target.value); S.line = v === null ? null : v; setTimeout(rer, 0); }
+    const k = e.target.dataset?.tsnum; if (k) { const v = num(e.target.value); S.f[k] = v > 0 ? v : null; setTimeout(rer, 0); }
+  });
+}
 function paFromOutlier(o) {
   const mm = o.mm; if (!mm) return null;
   const dd = mm === 'nba_dd'; if (o.side === 'Yes' && !dd) return null;
@@ -5289,6 +5550,7 @@ function bindAnalyzer() {
   $('paGame').addEventListener('change', e => { STORE.pa.game = e.target.value; save(); renderAnalyzer(); });
   $('paSort').addEventListener('change', e => { STORE.pa.sort = e.target.value; save(); renderAnalyzer(); });
   $('paSearch').addEventListener('input', e => { STORE.pa.q = e.target.value; save(); renderAnalyzer(); });
+  tsWire();
   $('paLoadBtn').addEventListener('click', () => { if (!hasOdds()) { PA.msg = 'Add your Odds API key (Prop outliers) first.'; renderAnalyzer(); return; } openAnalyzer(true); });
   $('paBody').addEventListener('click', e => {
     if (e.target.closest('[data-pareset]')) return;   // (handled at document level)
@@ -6182,6 +6444,7 @@ function bind() {
     if (APP.view === 'outliers') renderOutliers();
     if (APP.view === 'first') renderFirst();
     if (APP.view === 'analyzer') { renderAnalyzer(); openAnalyzer(false); }
+    if (APP.view === 'testing') openTesting();
     if (APP.view === 'recap') { renderRecap(); gradeAll(false).then(renderRecap); }
     if (APP.view === 'tracker') { updateGameCloses(); renderTracker(); renderReport(); gradeAll(false); }
     if (APP.view === 'ratings') openRatings();
