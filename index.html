@@ -521,7 +521,7 @@
     <div class="card stack">
       <div class="row between" style="flex-wrap:wrap;gap:.5rem">
         <div>
-          <h2 class="sm xb">📈 Prop analyzer · NBA</h2>
+          <h2 class="sm xb">📈 Prop Analyzer <span class="seg ts-seg sm2" id="paSport" style="margin-left:.4rem;vertical-align:middle"><button type="button" data-pasp="NBA">🏀 NBA</button><button type="button" data-pasp="NFL">🏈 NFL</button></span></h2>
           <p class="note" style="margin:0">Consensus line from the sportsbooks, the model's projection and cover %, this season's over/under record, and a game-by-game chart with a line slider for alt lines. Hit % uses the last 10 games, or the whole season until a player has 10.</p>
         </div>
         <button type="button" id="paLoadBtn" class="btn-go">Load lines</button>
@@ -4912,20 +4912,26 @@ async function scanFirst(force = false) {
    line slider (alt lines) → hit % over the last 10 games (or the season so far while there are fewer than 10).
    Everything except the consensus line comes from the model and ESPN game logs.
    ===================================================================== */
-const PA_MARKETS = [['nba_pts', 'Points', 'PTS'], ['nba_reb', 'Rebounds', 'REB'], ['nba_ast', 'Assists', 'AST'], ['nba_3pm', '3-Pointers', '3PM'], ['nba_pra', 'Pts+Reb+Ast', 'PRA']];
-STORE.pa = { mkt: 'nba_pts', game: '', q: '', sort: 'cover', ...(STORE.pa || {}) };
+const PA_MKTS = {
+  NBA: [['nba_pts', 'Points', 'PTS'], ['nba_reb', 'Rebounds', 'REB'], ['nba_ast', 'Assists', 'AST'], ['nba_3pm', '3-Pointers', '3PM'], ['nba_pra', 'Pts+Reb+Ast', 'PRA']],
+  NFL: [['pass_yds', 'Passing Yds', 'Pass Yds'], ['pass_cmp', 'Completions', 'Cmp'], ['pass_att', 'Pass Attempts', 'Pass Att'], ['pass_td', 'Passing TDs', 'Pass TD'], ['rush_yds', 'Rushing Yds', 'Rush Yds'],
+    ['rush_att', 'Carries', 'Carries'], ['rec', 'Receptions', 'Rec'], ['rec_yds', 'Receiving Yds', 'Rec Yds'], ['rush_rec_yds', 'Rush+Rec Yds', 'Rush+Rec']]
+};
+STORE.pa = { sp: 'NBA', mkt: 'nba_pts', game: '', q: '', sort: 'cover', ...(STORE.pa || {}) };
+const paSp = () => (STORE.pa.sp === 'NFL' ? 'NFL' : 'NBA');
+const paMk = () => PA_MKTS[paSp()];
 const PA = { open: null, slide: {}, busy: false, msg: '', loaded: false, cur: {} };
 const paShort = n => String(n || '').split(' ').filter(w => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(w)).slice(-1)[0] || n;
 function paRows() {
   const out = [], q = normName(STORE.pa.q || '');
   for (const sim of APP.simCache.values()) {
-    if (sim.ev.sport !== 'NBA' || sim.ev.state !== 'pre' || !sim.players) continue;
+    if (sim.ev.sport !== paSp() || sim.ev.state !== 'pre' || !sim.players) continue;
     if (STORE.pa.game && sim.ev.eventId !== STORE.pa.game) continue;
-    for (const r of sim.players) {
-      if (r.market !== STORE.pa.mkt || !(r.mean > 0)) continue;
+    for (const r of [...sim.players, ...(sim.players.derived || [])]) {
+      if (r.market !== STORE.pa.mkt || !(r.mean > 0) || r.binary) continue;
       if (q && !normName(r.name).includes(q) && !normName(r.team).includes(q)) continue;
       const bk = STORE.propBook[r.id], line = bk?.line ?? null;
-      const logs = logAll('NBA', r.playerId, r.market) || [];          // this season, most recent first
+      const logs = logAll(paSp(), r.playerId, r.market) || [];          // this season, most recent first
       const win = logs.length >= 10 ? logs.slice(0, 10) : logs;       // L10, or the season so far
       const pr = line !== null ? probAtLine(r, line) : null, pO = pr ? pr.over / Math.max(1e-9, pr.over + pr.under) : null;
       const rec = line === null ? null : logs.reduce((a, g) => (g.v > line ? a.o++ : g.v < line ? a.u++ : a.p++, a), { o: 0, u: 0, p: 0 });
@@ -4983,7 +4989,7 @@ function paDetail(x) {
   const avg = arr => arr.length ? fmtN(arr.reduce((a, g) => a + g.v, 0) / arr.length) : '—';
   return `<div class="stack" style="gap:.5rem">
     <div class="row between xs" style="flex-wrap:wrap;gap:.5rem">
-      <span><b>${esc(x.r.name)}</b> <span class="muted">${esc(x.team)} ${x.home ? 'vs' : '@'} ${esc(x.opp)} · ${esc(x.mLabel || PA_MARKETS.find(m => m[0] === STORE.pa.mkt)?.[1] || '')}</span></span>
+      <span><b>${esc(x.r.name)}</b> <span class="muted">${esc(x.team)} ${x.home ? 'vs' : '@'} ${esc(x.opp)} · ${esc(x.mLabel || paMk().find(m => m[0] === STORE.pa.mkt)?.[1] || '')}</span></span>
       <span class="muted">${x.proj === null ? (x.dd ? 'Double-double = 2 of PTS/REB/AST at 10+' : 'Game log only') : `Projection <b class="sky">${fmtN(x.proj)}</b>`}${x.line !== null ? ` · ${x.lineLab ? 'card line' : 'consensus'} <b>${fmtN(x.line)}</b>` : ''} · avg ${lab.toLowerCase().startsWith('last') ? 'L10' : 'season'} ${avg(x.win)}</span>
     </div>
     <div class="table-wrap pa-chart" style="padding-bottom:.2rem">${paChart(x, L)}</div>
@@ -5004,13 +5010,16 @@ function paDetail(x) {
 }
 function renderAnalyzer() {
   const el = $('paBody'); if (!el) return;
-  $('paMkts').innerHTML = PA_MARKETS.map(([k, , s]) => `<button type="button" data-pamkt="${k}" class="${STORE.pa.mkt === k ? 'on' : ''}">${s}</button>`).join('');
-  const games = [...APP.simCache.values()].filter(s => s.ev.sport === 'NBA' && s.ev.state === 'pre').map(s => s.ev).sort((a, b) => new Date(a.start) - new Date(b.start));
+  const SP = paSp();
+  if (!paMk().some(m => m[0] === STORE.pa.mkt)) STORE.pa.mkt = paMk()[0][0];
+  $('paSport').querySelectorAll('[data-pasp]').forEach(b => b.classList.toggle('on', b.dataset.pasp === SP));
+  $('paMkts').innerHTML = paMk().map(([k, , s]) => `<button type="button" data-pamkt="${k}" class="${STORE.pa.mkt === k ? 'on' : ''}">${s}</button>`).join('');
+  const games = [...APP.simCache.values()].filter(s => s.ev.sport === SP && s.ev.state === 'pre').map(s => s.ev).sort((a, b) => new Date(a.start) - new Date(b.start));
   $('paGame').innerHTML = `<option value="">All games (${games.length})</option>` + games.map(e => `<option value="${e.eventId}" ${STORE.pa.game === e.eventId ? 'selected' : ''}>${esc(e.awayAbbr)} @ ${esc(e.homeAbbr)} · ${new Date(e.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</option>`).join('');
   $('paSort').value = STORE.pa.sort; $('paSearch').value = STORE.pa.q || '';
-  if (APP.sport !== 'NBA' || !games.length) { el.innerHTML = `<div class="inset xs muted">${PA.busy ? esc(PA.msg) : 'Loading NBA games…'}</div>`; return; }
+  if (APP.sport !== SP || !games.length) { el.innerHTML = `<div class="inset xs muted">${PA.busy ? esc(PA.msg) : `No upcoming ${SP} games loaded yet.`}</div>`; return; }
   const rows = paRows(), withLine = rows.filter(x => x.line !== null).length;
-  const triedLines = Boolean(AF.at?.NBA);
+  const triedLines = Boolean(AF.at?.[SP]);
   $('paStatus').innerHTML = `${rows.length} players · ${withLine} with a sportsbook line${withLine < rows.length ? ` · <span class="muted">${triedLines ? `${rows.length - withLine} have no line posted by the books (yet)` : `press <b>Load lines</b> for the books' consensus lines (about 1 credit per market per game; cached ${STORE.ol.ttl} min)`}</span>` : ''}${PA.msg ? ` · ${esc(PA.msg)}` : ''}`;
   if (!rows.length) { el.innerHTML = '<div class="inset xs muted">No players match.</div>'; return; }
   const openX = rows.find(x => x.r.id === PA.open);
@@ -5031,11 +5040,12 @@ function renderAnalyzer() {
 }
 async function openAnalyzer(loadLines = false) {
   if (PA.busy) return;
-  PA.busy = true; PA.msg = 'Loading NBA games, rosters and game logs…'; renderAnalyzer();
+  const SP = paSp();
+  PA.busy = true; PA.msg = `Loading ${SP} games, rosters and game logs…`; renderAnalyzer();
   try {
-    if (APP.sport !== 'NBA') { APP.sport = 'NBA'; APP.eventId = null; APP.simCache.clear(); renderChrome(); await syncSport(false, true); }
+    if (APP.sport !== SP) { APP.sport = SP; APP.eventId = null; APP.simCache.clear(); renderChrome(); await syncSport(false, true); }
     await preloadSlate(); refreshAllSims();
-    if (loadLines) { PA.msg = 'Loading sportsbook lines…'; renderAnalyzer(); await autoFillLines('NBA', false); refreshAllSims(); }
+    if (loadLines) { PA.msg = 'Loading sportsbook lines…'; renderAnalyzer(); await autoFillLines(SP, false); refreshAllSims(); }
     PA.msg = '';
   } catch (e) { PA.msg = e.message; }
   PA.busy = false; PA.loaded = true; renderAnalyzer();
@@ -5807,6 +5817,8 @@ function paFromOutlier(o) {
   return pack({ id: '', name: P.playerName, team: P.teamAbbr, market: mm, noModel: true }, null, P.playerId, P.teamAbbr, ev);
 }
 function bindAnalyzer() {
+  $('paSport').addEventListener('click', e => { const b = e.target.closest('[data-pasp]'); if (!b || b.dataset.pasp === paSp()) return;
+    STORE.pa.sp = b.dataset.pasp; STORE.pa.mkt = paMk()[0][0]; STORE.pa.game = ''; PA.open = null; save(); openAnalyzer(false); });
   $('paMkts').addEventListener('click', e => { const b = e.target.closest('[data-pamkt]'); if (!b) return; STORE.pa.mkt = b.dataset.pamkt; PA.open = null; save(); renderAnalyzer(); });
   $('paGame').addEventListener('change', e => { STORE.pa.game = e.target.value; save(); renderAnalyzer(); });
   $('paSort').addEventListener('change', e => { STORE.pa.sort = e.target.value; save(); renderAnalyzer(); });
