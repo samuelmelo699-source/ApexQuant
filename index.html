@@ -5643,6 +5643,11 @@ function tsWire() {
    ===================================================================== */
 const SC = { busy: false, msg: '', data: null, inj: null, injT: 0, day: null, team: null };
 const SC_KEY = 'apexquant.nbasched';
+const SC_TEAMS = [['1', 'ATL', 'Atlanta Hawks'], ['2', 'BOS', 'Boston Celtics'], ['17', 'BKN', 'Brooklyn Nets'], ['30', 'CHA', 'Charlotte Hornets'], ['4', 'CHI', 'Chicago Bulls'], ['5', 'CLE', 'Cleveland Cavaliers'],
+  ['6', 'DAL', 'Dallas Mavericks'], ['7', 'DEN', 'Denver Nuggets'], ['8', 'DET', 'Detroit Pistons'], ['9', 'GS', 'Golden State Warriors'], ['10', 'HOU', 'Houston Rockets'], ['11', 'IND', 'Indiana Pacers'],
+  ['12', 'LAC', 'LA Clippers'], ['13', 'LAL', 'Los Angeles Lakers'], ['29', 'MEM', 'Memphis Grizzlies'], ['14', 'MIA', 'Miami Heat'], ['15', 'MIL', 'Milwaukee Bucks'], ['16', 'MIN', 'Minnesota Timberwolves'],
+  ['3', 'NO', 'New Orleans Pelicans'], ['18', 'NY', 'New York Knicks'], ['25', 'OKC', 'Oklahoma City Thunder'], ['19', 'ORL', 'Orlando Magic'], ['20', 'PHI', 'Philadelphia 76ers'], ['21', 'PHX', 'Phoenix Suns'],
+  ['22', 'POR', 'Portland Trail Blazers'], ['23', 'SAC', 'Sacramento Kings'], ['24', 'SA', 'San Antonio Spurs'], ['28', 'TOR', 'Toronto Raptors'], ['26', 'UTAH', 'Utah Jazz'], ['27', 'WSH', 'Washington Wizards']];
 const scDay = d => new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });   // ET calendar day, YYYY-MM-DD
 const scUTC = k => { const [y, m, d] = k.split('-').map(Number); return Date.UTC(y, m - 1, d); };
 const scGap = (a, b) => Math.round((scUTC(a) - scUTC(b)) / 864e5);
@@ -5652,19 +5657,23 @@ async function scLoad(force) {
   if (!force && c?.teams?.length && Date.now() - c.t < 6 * 3600e3) SC.data = c;
   else {
     SC.msg = 'Loading NBA teams…'; scStatus();
-    const tj = await fetchJson(urlFor('NBA', 'teams'), 12000, 1);
-    const teams = (tj.sports?.[0]?.leagues?.[0]?.teams || []).map(x => x.team).filter(Boolean)
-      .map(t => ({ id: String(t.id), abbr: t.abbreviation || '', name: t.displayName || t.name || '', logo: t.logos?.[0]?.href || '' })).sort((a, b) => a.abbr.localeCompare(b.abbr));
-    if (!teams.length) throw new Error('ESPN returned no NBA teams');
+    // ESPN's team list is optional (some browsers block it): fall back to ESPN's fixed NBA team ids
+    let teams = [];
+    try { const tj = await fetchJson(urlFor('NBA', 'teams'), 10000, 0);
+      teams = (tj.sports?.[0]?.leagues?.[0]?.teams || []).map(x => x.team).filter(Boolean).map(t => ({ id: String(t.id), abbr: t.abbreviation || '', name: t.displayName || t.name || '', logo: t.logos?.[0]?.href || '' })); } catch {}
+    if (teams.length < 30) teams = SC_TEAMS.map(([id, abbr, name]) => ({ id, abbr, name, logo: `https://a.espncdn.com/i/teamlogos/nba/500/${abbr.toLowerCase()}.png` }));
+    teams.sort((a, b) => a.abbr.localeCompare(b.abbr));
     const sched = {}, q = [...teams]; let done = 0;
     const num = x => { const v = x?.score; if (v === null || v === undefined) return null; const n = +(typeof v === 'object' ? (v.value ?? v.displayValue) : v); return Number.isFinite(n) ? n : null; };
+    let fails = 0, lastErr = '';
     await Promise.all(Array.from({ length: 6 }, async () => { while (q.length) { const t = q.shift(); try {
-      const d = await fetchJson(urlFor('NBA', `teams/${t.id}/schedule?seasontype=2`), 12000, 1);
+      const d = await fetchJson(urlFor('NBA', `teams/${t.id}/schedule`), 12000, 1);
       sched[t.id] = (d.events || []).map(e => { const c0 = e.competitions?.[0] || {}, cs = c0.competitors || [];
         const me = cs.find(x => String(x.team?.id ?? x.id) === t.id), op = cs.find(x => String(x.team?.id ?? x.id) !== t.id);
         return { id: String(e.id), date: e.date || c0.date, oppId: String(op?.team?.id ?? op?.id ?? ''), opp: op?.team?.abbreviation || '', home: me?.homeAway === 'home', done: Boolean(c0.status?.type?.completed ?? e.status?.type?.completed), pf: num(me), pa: num(op) }; })
         .filter(g => g.date).sort((a, b) => new Date(a.date) - new Date(b.date));
-    } catch {} done++; SC.msg = `Loading team schedules from ESPN: ${done}/${teams.length}…`; scStatus(); } }));
+    } catch (e) { fails++; lastErr = e.message || 'network'; } done++; SC.msg = `Loading team schedules from ESPN: ${done}/${teams.length}…`; scStatus(); } }));
+    if (fails === teams.length) throw new Error(`ESPN schedules didn't load: ${lastErr}`);
     SC.data = { t: Date.now(), teams, sched };
     try { localStorage.setItem(SC_KEY, JSON.stringify(SC.data)); } catch {}
   }
