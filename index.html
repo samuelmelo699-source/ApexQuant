@@ -129,6 +129,11 @@
   .neg { color: #fda4af; }
 
   details > summary { list-style: none; cursor: pointer; }
+  .sim-drops { display: flex; flex-direction: column; gap: .5rem; }
+  .sim-drop { padding: 0; overflow: hidden; } .sim-drop > summary { display: flex; align-items: center; gap: .6rem; padding: .75rem .9rem; transition: background .15s; }
+  .sim-drop > summary:hover { background: rgba(148,163,184,.05); } .sim-drop > summary::-webkit-details-marker { display: none; }
+  .sim-drop-t { font-weight: 800; font-size: .9rem; } .sim-chev { margin-left: auto; color: var(--muted); transition: transform .2s; } .sim-drop[open] .sim-chev { transform: rotate(180deg); }
+  .sim-drop[open] > summary { border-bottom: 1px solid var(--line); } .sim-drop-body { padding: .8rem .9rem; }
   .ol-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
   .ol-card { background: rgba(9,13,22,.9); border: 1px solid var(--line); border-radius: .9rem; padding: .8rem; }
   details > summary::-webkit-details-marker { display: none; }
@@ -265,12 +270,10 @@
   <!-- ===================== SIMULATOR ===================== -->
   <section id="view-sim" class="stack">
 
-    <details id="setup" class="card" open>
-      <summary class="row between">
-        <span class="b sm">⚙ Lines, ratings &amp; lineup</span>
-        <span id="setupLabel" class="mono xs green"></span>
-      </summary>
-      <div class="stack" style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--line)">
+    <div class="sim-drops">
+    <details class="card sim-drop" data-drop="lines">
+      <summary><span class="sim-drop-t">📏 Lines</span><span id="setupLabel" class="mono xs green"></span><span class="sim-chev" aria-hidden="true">▾</span></summary>
+      <div class="stack sim-drop-body">
 
         <div class="inset grid g4">
           <div>
@@ -295,13 +298,23 @@
           <span class="muted" id="lineSource"></span>
           <button type="button" id="resetLinesBtn">Reset to ESPN lines</button>
         </div>
-
-        <div class="grid g2">
-          <div class="inset stack" data-side="away" id="teamAway"></div>
-          <div class="inset stack" data-side="home" id="teamHome"></div>
-        </div>
       </div>
     </details>
+    <details class="card sim-drop" data-drop="ratings">
+      <summary><span class="sim-drop-t">🎚 Ratings</span><span class="xs muted">offense, defense, pace &amp; injuries</span><span class="sim-chev" aria-hidden="true">▾</span></summary>
+      <div class="grid g2 sim-drop-body">
+        <div class="inset stack" data-side="away" id="teamAway"></div>
+        <div class="inset stack" data-side="home" id="teamHome"></div>
+      </div>
+    </details>
+    <details class="card sim-drop" data-drop="lineup" id="lineupDrop">
+      <summary><span class="sim-drop-t">👥 Lineup</span><span class="xs muted" id="lineupLabel">starters &amp; rotation</span><span class="sim-chev" aria-hidden="true">▾</span></summary>
+      <div class="grid g2 sim-drop-body">
+        <div class="inset stack" id="lineAway"></div>
+        <div class="inset stack" id="lineHome"></div>
+      </div>
+    </details>
+    </div>
 
     <div id="gateBanner" class="banner bad hidden"></div>
 
@@ -2458,7 +2471,8 @@ function renderTeamPanel(ev, side) {
   if (SPORTS[ev.sport].props) {
     const slots = buildSlots(ev.sport, teamId, ev);
     const opts = roster.filter(p => p.status !== 'inactive').sort((a, b) => a.group.localeCompare(b.group) || (a.depthRank ?? 999) - (b.depthRank ?? 999) || a.playerName.localeCompare(b.playerName));
-    lineup = `<div class="stack" style="margin-top:.5rem">
+    lineup = `<div class="stack">
+      <div style="border-bottom:1px solid var(--line);padding-bottom:.4rem"><div class="xs muted">${side === 'away' ? 'AWAY' : 'HOME'}</div><h3 class="sm xb">${esc(name)} (${esc(abbr)})</h3></div>
       <div class="row between xs"><b class="muted">Lineup</b>
         <span class="${['ok', 'stats', 'box'].includes(depth) ? 'green' : 'amber'}">${!roster.length ? 'Loading roster…' : depth === 'box' ? (ev.sport === 'NFL' ? 'From recent box scores (attempts, carries, targets)' : 'From recent box scores (starts + minutes)') : depth === 'ok' ? 'From ESPN depth chart' : depth === 'stats' ? 'Ranked by season stats' : 'Estimated by experience — please confirm'}</span></div>
       ${slots.map(s => {
@@ -2493,13 +2507,15 @@ function renderTeamPanel(ev, side) {
     ${SPORTS[ev.sport].props ? (() => { const inj = teamInjuryImpact(ev.sport, teamId); const on = !STORE.anchor && STORE.autoInj !== false;
       return `<div class="xs ${inj.list.length ? 'amber' : 'muted'}">Injury report (auto): ${esc(injSummary(inj, ev.sport))}${inj.list.length ? (on ? ' · <span class="green">applied</span>' : ' · <span class="muted">info only: market-anchored lines already price this</span>') : ''}</div>`; })() : ''}
     <div class="grid g3" style="gap:.5rem">${INJ_FIELDS(ev.sport).map(k => injSel(k, Lb[k])).join('')}</div>
-    <div class="note">The three dropdowns are extra manual adjustments on top of the automatic injury report (e.g. news ESPN hasn't posted yet).</div>
-    ${lineup}`;
+    <div class="note">The three dropdowns are extra manual adjustments on top of the automatic injury report (e.g. news ESPN hasn't posted yet).</div>`;
+  const lb = side === 'away' ? $('lineAway') : $('lineHome');
+  lb.innerHTML = lineup || '<div class="xs muted">No player lineups for this sport.</div>';
+  $('lineupDrop').classList.toggle('hidden', !SPORTS[ev.sport].props);
 }
 
 function renderSetup() {
   const ev = currentEvent();
-  if (!ev) { $('setupLabel').textContent = ''; $('teamAway').innerHTML = $('teamHome').innerHTML = '<div class="muted xs">No game selected.</div>'; return; }
+  if (!ev) { $('setupLabel').textContent = ''; $('teamAway').innerHTML = $('teamHome').innerHTML = $('lineAway').innerHTML = $('lineHome').innerHTML = '<div class="muted xs">No game selected.</div>'; return; }
   const L = linesFor(ev);
   $('setupLabel').textContent = `${ev.awayAbbr} @ ${ev.homeAbbr}`;
   const [spName, totName] = MARKET_NAMES[ev.sport];
@@ -6557,7 +6573,10 @@ function bind() {
   $('resetLinesBtn').addEventListener('click', () => { const ev = currentEvent(); if (!ev) return; delete STORE.lines[`${ev.sport}:${ev.eventId}`]; save(); renderSetup(); renderTicker(); runSelected(); });
 
   const teamIdFor = side => { const ev = currentEvent(); return ev && (side === 'away' ? ev.awayTeamId : ev.homeTeamId); };
-  for (const panel of [$('teamAway'), $('teamHome')]) {
+  // the three Simulator dropdowns remember whether they're open
+  document.querySelectorAll('.sim-drop').forEach(d => { d.open = Boolean((STORE.simDrop ||= {})[d.dataset.drop]);
+    d.addEventListener('toggle', () => { STORE.simDrop[d.dataset.drop] = d.open; save(); }); });
+  for (const panel of [$('teamAway'), $('teamHome'), $('lineAway'), $('lineHome')]) {
     panel.addEventListener('input', e => {
       const t = e.target;
       if (t.dataset.rate) {
