@@ -2120,17 +2120,18 @@ function parseBox(sport, d) {
       const f = (B.fs[tid] ||= { shot: sh, make: null, starters: [] });
       if (!f.make && p.scoringPlay) f.make = sh;
     }
-    // every player's line: [id, name, teamId, pos, min, pts, reb, ast, 3pm, blk, stl, starter] (for the 🔍 Analyze matchup panel)
+    // every player's line: [id, name, teamId, pos, min, pts, reb, ast, 3pm, blk, stl, starter, fga, fta, 3pa, to] (🔍 Analyze / Player Lab)
     B.pl = [];
     for (const blk of d.boxscore?.players || []) {
       const tid = String(blk.team?.id || '');
       for (const st of blk.statistics || []) {
         const ix = [boxIdx(st, ['minutes'], ['MIN']), boxIdx(st, ['points'], ['PTS']), boxIdx(st, ['rebounds', 'totalRebounds'], ['REB']), boxIdx(st, ['assists'], ['AST']),
           boxIdx(st, ['threePointFieldGoalsMade-threePointFieldGoalsAttempted'], ['3PT']), boxIdx(st, ['blocks'], ['BLK']), boxIdx(st, ['steals'], ['STL'])];
+        const fgI = boxIdx(st, ['fieldGoalsMade-fieldGoalsAttempted'], ['FG']), ftI = boxIdx(st, ['freeThrowsMade-freeThrowsAttempted'], ['FT']), toI = boxIdx(st, ['turnovers'], ['TO']);
         for (const a of st.athletes || []) {
           if (a.didNotPlay || !a.stats?.length || !a.athlete?.id) continue;
           const min = cellN(a, ix[0]); if (!(min > 0)) continue;
-          B.pl.push([String(a.athlete.id), a.athlete.displayName || a.athlete.shortName || '', tid, posGroup(a.athlete) || '', min, ...ix.slice(1).map(i => cellN(a, i, 0)), a.starter ? 1 : 0]);
+          B.pl.push([String(a.athlete.id), a.athlete.displayName || a.athlete.shortName || '', tid, posGroup(a.athlete) || '', min, ...ix.slice(1).map(i => cellN(a, i, 0)), a.starter ? 1 : 0, cellN(a, fgI, 1), cellN(a, ftI, 1), cellN(a, ix[4], 1), cellN(a, toI)]);
         }
       }
     }
@@ -2189,7 +2190,7 @@ function parseBox(sport, d) {
 async function ensureBoxes(events, perTeam = 6) {
   const sport = events[0]?.sport; if (!['NBA', 'NFL', 'NHL'].includes(sport) || BOX.busy) return 0;
   const c = boxCache(), want = new Set();
-  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && (!c[`${sport}:${g.id}`] || ((sport === 'NFL' && c[`${sport}:${g.id}`].pl === undefined) || sport === 'NBA' && (c[`${sport}:${g.id}`].tip === undefined || c[`${sport}:${g.id}`].fs === undefined || c[`${sport}:${g.id}`].pl === undefined)))) want.add(g.id);
+  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && (!c[`${sport}:${g.id}`] || ((sport === 'NFL' && c[`${sport}:${g.id}`].pl === undefined) || sport === 'NBA' && (c[`${sport}:${g.id}`].tip === undefined || c[`${sport}:${g.id}`].fs === undefined || c[`${sport}:${g.id}`].pl === undefined || (c[`${sport}:${g.id}`].pl[0] && c[`${sport}:${g.id}`].pl[0].length < 16))))) want.add(g.id);
   if (!want.size) return 0;
   BOX.busy = true;
   const queue = [...want]; let n = 0;
@@ -5077,7 +5078,7 @@ const AN_SP = {
     name: { nba_pts: 'points', nba_reb: 'rebounds', nba_ast: 'assists', nba_3pm: 'threes', nba_blk: 'blocks', nba_stl: 'steals', nba_pra: 'pts+reb+ast', nba_pr: 'pts+reb', nba_pa: 'pts+ast', nba_ra: 'reb+ast', nba_dd: 'double-doubles' },
     binTxt: { nba_dd: 'double-double' },
     pos: { G: 'guard', F: 'forward', C: 'center' },
-    line: a => ({ id: a[0], name: a[1], team: a[2], pos: a[3], min: a[4], pts: a[5], reb: a[6], ast: a[7], tpm: a[8], blk: a[9], stl: a[10], st: a[11] }),
+    line: a => ({ id: a[0], name: a[1], team: a[2], pos: a[3], min: a[4], pts: a[5], reb: a[6], ast: a[7], tpm: a[8], blk: a[9], stl: a[10], st: a[11], fga: a[12], fta: a[13], tpa: a[14], to: a[15] }),
     log: g => ({ min: statFrom(g.names, g.stats, ['minutes']) ?? 0, pts: statFrom(g.names, g.stats, LOG_STATS.nba_pts) ?? 0, reb: statFrom(g.names, g.stats, LOG_STATS.nba_reb) ?? 0, ast: statFrom(g.names, g.stats, LOG_STATS.nba_ast) ?? 0,
       tpm: statFrom(g.names, g.stats, LOG_STATS.nba_3pm) ?? 0, blk: statFrom(g.names, g.stats, LOG_STATS.nba_blk) ?? 0, stl: statFrom(g.names, g.stats, LOG_STATS.nba_stl) ?? 0 }),
     played: l => l.min > 0,
@@ -5148,7 +5149,7 @@ async function anEnsureLeague(sp) {
   const teams = anTeams(sp);
   const posJob = sp === 'NFL' ? anNflPositions(teams) : null;
   const c = boxCache(), t0 = AN_SP[sp].start().getTime(), want = new Set();
-  for (const tid of teams) for (const g of teamGames(sp, tid).filter(g => new Date(g.date).getTime() >= t0).slice(0, 20)) if (!c[`${sp}:${g.id}`]?.pl) want.add(g.id);
+  for (const tid of teams) for (const g of teamGames(sp, tid).filter(g => new Date(g.date).getTime() >= t0).slice(0, 20)) if (!c[`${sp}:${g.id}`]?.pl || (sp === 'NBA' && c[`${sp}:${g.id}`].pl[0] && c[`${sp}:${g.id}`].pl[0].length < 16)) want.add(g.id);
   const total = want.size, queue = [...want]; let done = 0, n = 0;
   if (total) {
     const tick = () => { AN.msg = `Loading this season's ${sp} box scores from ESPN: ${done}/${total} games (first time only)…`; anPaint(); };
@@ -5378,15 +5379,17 @@ TS_MKS.NBA = [
   ['fta', 'FT Attempted', l => l.fta, null], ['fga', 'FG Attempted', l => l.fga, null], ['tpa', '3PT Attempted', l => l.tpa, null],
   ['dd', 'Double Double', l => ['pts', 'reb', 'ast', 'blk', 'stl'].filter(k => l[k] >= 10).length >= 2 ? 1 : 0, 'nba_dd'], ['td', 'Triple Double', l => ['pts', 'reb', 'ast', 'blk', 'stl'].filter(k => l[k] >= 10).length >= 3 ? 1 : 0, null]];
 TS_MKS.NFL = [
-  ['cyd', 'Rec Yds', l => l.cyd, 'rec_yds'], ['rec', 'Receptions', l => l.rec, 'rec'], ['tgt', 'Targets', l => l.tgt, null], ['ryd', 'Rush Yds', l => l.ryd, 'rush_yds'], ['car', 'Carries', l => l.car, 'rush_att'],
-  ['rry', 'Rush+Rec Yds', l => l.ryd + l.cyd, 'rush_rec_yds'], ['pyd', 'Pass Yds', l => l.pyd, 'pass_yds'], ['ptd', 'Pass TDs', l => l.ptd, 'pass_td'], ['cmp', 'Completions', l => l.cmp, 'pass_cmp'],
-  ['att', 'Pass Attempts', l => l.att, 'pass_att'], ['int', 'Interceptions', l => l.int, 'pass_int'], ['pry', 'Pass+Rush Yds', l => l.pyd + l.ryd, null], ['atd', 'Anytime TD', l => (l.rtd || 0) + (l.ctd || 0) > 0 ? 1 : 0, 'anytime_td']];
+  ['cyd', 'Rec Yds', l => l.cyd, 'rec_yds', 'RB WR TE'], ['rec', 'Receptions', l => l.rec, 'rec', 'RB WR TE'], ['tgt', 'Targets', l => l.tgt, null, 'RB WR TE'], ['ryd', 'Rush Yds', l => l.ryd, 'rush_yds', 'QB RB WR'], ['car', 'Carries', l => l.car, 'rush_att', 'QB RB'],
+  ['rry', 'Rush+Rec Yds', l => l.ryd + l.cyd, 'rush_rec_yds', 'RB WR TE'], ['pyd', 'Pass Yds', l => l.pyd, 'pass_yds', 'QB'], ['ptd', 'Pass TDs', l => l.ptd, 'pass_td', 'QB'], ['cmp', 'Completions', l => l.cmp, 'pass_cmp', 'QB'],
+  ['att', 'Pass Attempts', l => l.att, 'pass_att', 'QB'], ['int', 'Interceptions', l => l.int, 'pass_int', 'QB'], ['pry', 'Pass+Rush Yds', l => l.pyd + l.ryd, null, 'QB'], ['atd', 'Anytime TD', l => (l.rtd || 0) + (l.ctd || 0) > 0 ? 1 : 0, 'anytime_td', 'QB RB WR TE']];
+// NFL: only the markets that fit the player's position (a running back has no passing yards)
+const tsMkFits = (m, grp) => tsSp() !== 'NFL' || !m[4] || !grp || m[4].split(' ').includes(grp);
 const tsSp = () => (tsF().sp === 'NFL' ? 'NFL' : 'NBA');
 const TS_MK_ = () => TS_MKS[tsSp()];
 const tsMk = k => TS_MK_().find(m => m[0] === k) || TS_MK_()[0];
 const tsBin = k => k === 'dd' || k === 'td' || k === 'atd';
 // box-score value of a market for an opposing player line (for defense ranks); NBA markets the box doesn't carry fall back to points
-const tsBoxVal = (k, l) => { const m = tsMk(k); if (tsSp() === 'NFL') return m[2](l); return ['to', 'fta', 'fga', 'tpa'].includes(k) ? l.pts : m[2]({ ...l, to: 0, fta: 0, fga: 0, tpa: 0 }); };
+const tsBoxVal = (k, l) => { const v = tsMk(k)[2](l); return Number.isFinite(v) ? v : 0; };
 // NBA seasons "26/27"; NFL seasons by start year "2026"
 const tsSeasonOf = d => { const x = new Date(d);
   if (tsSp() === 'NFL') return String(x.getMonth() >= 6 ? x.getFullYear() : x.getFullYear() - 1);
@@ -5394,8 +5397,9 @@ const tsSeasonOf = d => { const x = new Date(d);
 const tsCurSeason = () => tsSeasonOf(new Date());
 const tsF = () => (STORE.ts ||= { sp: 'NBA', game: '', pid: '', mk: 'pts', side: 'O', line: null, ft: 'sug', mode: 'avg', f: {} });
 // workload used for "comparable" games: NBA minutes; NFL pass attempts / carries / targets / touches for the market
-const tsWk = () => { if (tsSp() === 'NBA') return { f: l => l.min, lab: 'min', short: 'm' }; const m = tsMk(tsF().mk), V = AN_SP.NFL.vol(m[3] || (m[0] === 'pry' ? 'pass_yds' : m[0] === 'tgt' ? 'rec' : 'rush_rec_yds'));
-  return { f: V.f, lab: V.lab, short: { 'pass att': ' att', carries: ' car', targets: ' tgt', touches: ' tch' }[V.lab] || '' }; };
+const tsWk = () => { if (tsSp() === 'NBA') return { f: l => l.min, lab: 'min', short: 'm', k: 0.75, floor: 15, nba: true };
+  const m = tsMk(tsF().mk), V = m[0] === 'pry' ? { f: l => l.att + l.car, lab: 'pass att + carries', k: 0.6, floor: 15 } : AN_SP.NFL.vol(m[3] || (m[0] === 'tgt' ? 'rec' : 'rush_rec_yds'));
+  return { f: V.f, lab: V.lab, k: V.k, floor: V.floor, short: { 'pass att': ' att', carries: ' car', targets: ' tgt', touches: ' tch', 'pass att + carries': ' plays' }[V.lab] || '' }; };
 function tsLine(g) {
   const f = k => statFrom(g.names, g.stats, k) ?? 0;
   const head = { date: g.date, opp: g.opp, oppId: g.oppId, home: g.home, res: String(g.res || '').charAt(0).toUpperCase(), season: tsSeasonOf(g.date) };
@@ -5490,8 +5494,10 @@ function renderTesting() {
   if (box.clientWidth) TS.cw = box.clientWidth;   // draw the chart at the real width (phones)
   $('tsSport').querySelectorAll('[data-tssp]').forEach(b => b.classList.toggle('on', b.dataset.tssp === tsSp()));
   if (!TS_MK_().some(m => m[0] === S.mk)) S.mk = TS_MK_()[0][0];
-  $('tsMkts').innerHTML = TS_MK_().map(m => `<button type="button" class="ts-chip ${S.mk === m[0] ? 'on' : ''}" data-tsmk="${m[0]}">${m[1]}</button>`).join('');
-  const X = tsCtx();
+  let X = tsCtx();
+  const grp = X.P?.group;
+  if (X.P && !tsMkFits(tsMk(S.mk), grp)) { const f0 = TS_MK_().find(m => tsMkFits(m, grp)); if (f0) { S.mk = f0[0]; X = tsCtx(); } }
+  $('tsMkts').innerHTML = TS_MK_().filter(m => tsMkFits(m, grp)).map(m => `<button type="button" class="ts-chip ${S.mk === m[0] ? 'on' : ''}" data-tsmk="${m[0]}">${m[1]}</button>`).join('');
   $('tsGames').innerHTML = (X.evs || []).map(e => `<button type="button" class="ts-game ${X.ev?.eventId === e.eventId ? 'on' : ''}" data-tsgame="${esc(e.eventId)}"><b>${esc(e.awayAbbr)} <span class="muted">@</span> ${esc(e.homeAbbr)}</b><span>${esc(new Date(e.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</span></button>`).join('') || `<span class="xs muted">No upcoming ${tsSp()} games loaded</span>`;
   $('tsGames').querySelector('.on')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   $('tsPlayer').innerHTML = (X.players || []).map(p => `<option value="${esc(p.playerId)}" ${X.P?.playerId === p.playerId ? 'selected' : ''}>${esc(p.playerName)} · ${esc(String(p.teamId) === String(X.ev.homeTeamId) ? X.ev.homeAbbr : X.ev.awayAbbr)}${p.group ? ' · ' + esc(p.group) : ''}</option>`).join('');
@@ -5527,7 +5533,7 @@ function renderTesting() {
       <details ${tsAcc('season')}><summary>Season &amp; Games</summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${allSeasons.map(s => tsChip('seasonT:' + s, s, seasons.includes(s))).join('')}<span class="muted xs">·</span>${['5', '10', '20'].map(n => tsChip('sample:' + n, 'Last ' + n, f.sample === n)).join('')}${tsChip('sample:max', 'All', !f.sample || f.sample === 'max')}${tsChip('h2h', 'Only vs ' + esc(X.oppAbbr), f.h2h)}</div></details>
       <details ${tsAcc('splits')}><summary>Splits</summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${tsChip('home:home', 'Home', f.home === 'home')}${tsChip('home:away', 'Away', f.home === 'away')}<span class="muted xs">·</span>${tsChip('res:W', 'Team won', f.res === 'W')}${tsChip('res:L', 'Team lost', f.res === 'L')}<span class="muted xs">·</span>${SP === 'NFL' ? tsChip('rest:s', 'Short week', f.rest === 's') + tsChip('rest:n', 'Normal week', f.rest === 'n') + tsChip('rest:l', 'After bye / extra rest', f.rest === 'l') : tsChip('rest:0', 'Back-to-back', f.rest === '0') + tsChip('rest:1', '1 day rest', f.rest === '1') + tsChip('rest:2', '2+ days rest', f.rest === '2')}</div></details>
       <details ${tsAcc('opp')}><summary>Opponent Rankings <span class="muted">(games vs teams ranked within ±5 of ${esc(X.oppAbbr)}; ranks are this season's, 1 = allows fewest)</span></summary><div class="row" style="flex-wrap:wrap;gap:.35rem">${tsRK().map(([key, lab]) => tsChip('rk_' + key, key === 'dvp' ? `Def vs ${posName ? posName + 's' : 'position'} (${esc(m[1])})` : lab, f['rk_' + key], X.ranks ? tsRankTag(rk(key), side) : '')).join('')}</div></details>
-      <details ${tsAcc('stats')}><summary>Player Stats</summary><div class="row" style="flex-wrap:wrap;gap:.6rem;align-items:center">${tsChip('minutes', SP === 'NFL' ? `${esc(WK.lab)} near his average` : 'Minutes near his average', f.minutes)}${tsStatMins().map(([key, , lab]) => num(key, lab)).join('')}</div></details>
+      <details ${tsAcc('stats')}><summary>Player Stats</summary><div class="row" style="flex-wrap:wrap;gap:.6rem;align-items:center">${tsChip('minutes', SP === 'NFL' ? `${esc(WK.lab[0].toUpperCase() + WK.lab.slice(1))} near his average` : 'Minutes near his average', f.minutes)}${tsStatMins().map(([key, , lab]) => num(key, lab)).join('')}</div></details>
     </div>`;
   const nActive = Object.entries(f).filter(([k2, v]) => v && !(k2 === 'seasons' && v.length === 1 && v[0] === cur) && !(k2 === 'sample' && v === 'max')).length;
   // splits table (same seasons as the filter)
@@ -5540,20 +5546,23 @@ function renderTesting() {
     ${X.ranks ? splitRow('vs top-10 D (this stat/pos)', base.filter(g => tierOf(g) === 'top')) + splitRow('vs bottom-10 D', base.filter(g => tierOf(g) === 'bot')) : ''}${splitRow('vs ' + esc(X.oppAbbr), base.filter(g => g.oppId === X.oppId))}</tbody></table>`;
   // similar players vs tonight's opponent (from the Analyze engine)
   let sim = '<div class="xs muted">Loading this season\'s box scores…</div>', matchup = '';
-  if (TS.ready?.[SP] && m[3]) {
-    const A = anCompute({ sport: SP, player: X.P.playerName, pid: X.P.playerId, mm: m[3], side, line, start: X.ev.start });
-    if (A.err) sim = `<div class="xs amber">${esc(A.err)}</div>`;
+  if (TS.ready?.[SP]) {
+    const A = m[3] ? anCompute({ sport: SP, player: X.P.playerName, pid: X.P.playerId, mm: m[3], side, line, start: X.ev.start }) : null;
+    // comparable = same position with a similar workload, against tonight's opponent this season (every market, from box scores)
+    const qualV = X.avgWk ? Math.max(WK.floor, Math.round(WK.k * X.avgWk)) : WK.floor;
+    const simAll = pos ? anGames(SP, X.oppId).flatMap(gm => gm.against.filter(l => l.pos === pos && (WK.f(l) || 0) >= qualV).map(l => ({ ...l, date: gm.date, teamAbbr: gm.opp, vol: WK.f(l), v: m[2](l) })).filter(l => Number.isFinite(l.v))) : [];
+    if (!pos) sim = '<div class="xs muted">His position is unknown, so there are no comparable players.</div>';
     else {
-      const rows = A.all.map(l => ({ ...l, diff: bin ? null : l.v - line, ok: bin ? l.v >= 1 : l.v === line ? null : side === 'U' ? l.v < line : l.v > line }));
+      const rows = simAll.map(l => ({ ...l, diff: bin ? null : l.v - line, ok: bin ? l.v >= 1 : l.v === line ? null : side === 'U' ? l.v < line : l.v > line }));
       const graded = rows.filter(r => r.ok !== null), per = 10, pages = Math.max(1, Math.ceil(rows.length / per)); TS.page = Math.min(TS.page, pages - 1);
       const ad = bin ? null : anAvg(rows.map(r => r.diff));
       sim = `<div class="grid" style="grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:.5rem">${tile('AVG DIFF', ad === null ? '—' : (ad > 0 ? '+' : '') + anF(ad), ad === null ? 'muted' : (side === 'U' ? ad < 0 : ad > 0) ? 'green' : 'rose')}${tile('AVG DIFF %', ad === null || !line ? '—' : (ad > 0 ? '+' : '') + anF(ad / line * 100, 0) + '%', ad === null ? 'muted' : (side === 'U' ? ad < 0 : ad > 0) ? 'green' : 'rose')}${tile('HIT RATE', graded.length ? `${Math.round(graded.filter(r => r.ok).length / graded.length * 100)}%` : '—', graded.length ? (graded.filter(r => r.ok).length / graded.length >= 0.6 ? 'green' : graded.filter(r => r.ok).length / graded.length <= 0.4 ? 'rose' : 'amber') : 'muted')}</div>
-        <div class="xs muted" style="margin-bottom:.3rem">${esc(A.pn[0].toUpperCase() + A.pn.slice(1))} with ${A.qualVol}+ ${esc(A.V.lab)} against ${esc(X.oppAbbr)} this season (${rows.length} player-games)</div>
+        <div class="xs muted" style="margin-bottom:.3rem">${esc(posName[0].toUpperCase() + posName.slice(1))}s with ${qualV}+ ${esc(WK.lab)} against ${esc(X.oppAbbr)} this season (${rows.length} player-games)</div>
         ${rows.length ? `<div class="table-wrap"><table class="xs ts-tbl"><thead><tr><th>Date</th><th>Team</th><th>Player</th><th>Line</th><th>Result</th><th>Diff %</th></tr></thead><tbody>${rows.slice(TS.page * per, TS.page * per + per).map(r => `<tr><td class="mono">${esc(new Date(r.date).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</td><td>${esc(r.teamAbbr)}</td><td>${esc(r.name)}</td><td class="mono">${bin ? 'Yes' : fmtN(line)}</td><td><span class="ts-res ${r.ok === null ? '' : r.ok ? 'hit' : 'miss'}">${bin ? (r.v ? 'Yes' : 'No') : fmtN(r.v)}</span></td><td class="mono ${r.ok === null ? 'muted' : r.ok ? 'green' : 'rose'}">${bin || !line ? '—' : (r.diff > 0 ? '+' : '') + Math.round(r.diff / line * 100) + '%'}</td></tr>`).join('')}</tbody></table></div>
           <div class="row" style="justify-content:center;gap:.5rem;margin-top:.35rem"><button type="button" class="xs" data-tspage="-1" ${TS.page ? '' : 'disabled'}>‹</button><span class="xs muted">${TS.page + 1} / ${pages}</span><button type="button" class="xs" data-tspage="1" ${TS.page < pages - 1 ? '' : 'disabled'}>›</button></div>` : '<div class="xs muted">Insufficient data</div>'}`;
-      matchup = `<details ${tsAcc('matchup')}><summary>🔍 Full matchup analysis vs ${esc(X.oppAbbr)} (defense, position, score)</summary>${anHtml(A).replace(/<button type="button" class="xs" data-olanclose>Close ✕<\/button>/, '')}</details>`;
+      if (A && !A.err) matchup = `<details ${tsAcc('matchup')}><summary>🔍 Full matchup analysis vs ${esc(X.oppAbbr)} (defense, position, score)</summary>${anHtml(A).replace(/<button type="button" class="xs" data-olanclose>Close ✕<\/button>/, '')}</details>`;
     }
-  } else if (!m[3]) sim = `<div class="xs muted">Similar-player comparison isn't available for ${esc(m[1])} (box scores don't carry it). Pick one of the other markets.</div>`;
+  }
   // quick hit-rate strip (same seasons, before the other filters)
   const strip = [['L5', base.slice(0, 5)], ['L10', base.slice(0, 10)], ['L20', base.slice(0, 20)], [seasons.length > 1 ? 'All' : 'Season', base], ['H2H', G.filter(g => g.oppId === X.oppId)]].map(([lab, xs]) => {
     const q = tsStats(xs.map(g => g.v), line, side, bin), r2 = q.gn ? q.h / q.gn : null;
