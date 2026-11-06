@@ -172,6 +172,14 @@
   .ol-proj-line { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .3rem; }
   .ol-proj-line span { display: inline-flex; gap: .25rem; align-items: baseline; padding: .1rem .45rem; border-radius: .4rem; background: #0b1220; border: 1px solid #1f2937; font-family: ui-monospace, monospace; font-size: .74rem; }
   .ol-proj-line span i { font-style: normal; color: var(--muted); font-size: .64rem; } .ol-proj-line span.on { border-color: var(--sky); color: var(--sky); }
+  .ol-full { margin-top: .45rem; border: 1px solid #1f2937; border-radius: .6rem; background: #0b1220; padding: .35rem .5rem; font-size: .74rem; }
+  .ol-full > summary { display: flex; align-items: center; gap: .45rem; cursor: pointer; list-style: none; } .ol-full > summary::-webkit-details-marker { display: none; }
+  .ol-full > summary > span:first-child { color: var(--muted); } .ol-chev { margin-left: auto; color: var(--muted); transition: transform .2s; } .ol-full[open] .ol-chev { transform: rotate(180deg); }
+  .ol-ptbl { width: 100%; border-collapse: collapse; margin-top: .35rem; } .ol-ptbl th { font-size: .58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; text-align: right; padding: .1rem .25rem; }
+  .ol-ptbl th:first-child, .ol-ptbl td:first-child { text-align: left; } .ol-ptbl td { padding: .14rem .25rem; text-align: right; border-top: 1px solid #141c2b; white-space: nowrap; }
+  .ol-ptbl tr.on td { background: rgba(56,189,248,.08); } .ol-ptbl tr.on td:first-child { color: var(--sky); font-weight: 700; box-shadow: inset 2px 0 0 var(--sky); }
+  .ol-ms { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .35rem; } .ol-ms span { display: inline-flex; gap: .3rem; align-items: baseline; padding: .08rem .4rem; border-radius: .35rem; border: 1px solid #1f2937; font-family: ui-monospace, monospace; font-size: .7rem; }
+  .ol-ms span i { font-style: normal; color: var(--muted); font-family: inherit; font-size: .64rem; } .ol-ms span.on { border-color: var(--sky); color: var(--sky); }
   .an-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .4rem; }
   .an-tile { display: flex; flex-direction: column; gap: .05rem; padding: .45rem .5rem; border-radius: .6rem; background: #0b1220; border: 1px solid #1f2937; min-width: 0; }
   .an-tile span { font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4135,7 +4143,7 @@ function renderOutliers() {
         <div><div class="b">${esc(r.player)}</div><div class="xs muted">${r.side === 'Yes' ? '' : r.side + ' ' + r.line + ' '}${esc(r.mLabel)}${r.alt ? ' · alt' : ''}</div></div>
         <div class="xl xb mono green">${fmtOdds(r.price)}</div>
       </div>
-      ${projHtml}
+      ${olProjHtml(r) || projHtml}
       ${(h => h ? `<div class="xs" style="margin-top:.4rem">🎯 Hit <b class="mono ${h.rate >= 0.6 ? 'green' : h.rate <= 0.4 ? 'rose' : ''}">${h.hits}/${h.n} (${Math.round(h.rate * 100)}%)</b> <span class="muted">${r.mm === 'nba_dd' ? `double-doubles in his last ${h.n} games` : r.side === 'Yes' ? `last ${h.n} games` : `last ${h.n} games at this line`}</span></div>` : '')(olHit(r))}
       <div class="xs" style="margin-top:.4rem">📗 <b>${esc(r.book)}</b> · fair ${fmtOdds(r.fairOdds)} (${pct(r.pWin)}) · ${r.nBooks} books${age}</div>
       <div class="row between xs" style="margin-top:.4rem">
@@ -4315,6 +4323,7 @@ function bindOutliers() {
   $('olMarket').addEventListener('change', renderOutliers);
   $('olScanBtn').addEventListener('click', () => scanOutliers(false));
   $('olRefreshBtn').addEventListener('click', () => scanOutliers(true));
+  $('olBody').addEventListener('toggle', e => { if (e.target.matches?.('[data-olproj]')) { STORE.olProjOpen = e.target.open; save(); } }, true);
   $('olBody').addEventListener('click', e => {
     const b = e.target.closest('[data-track]'); if (b) { trackOutlier(b.dataset.track); return; }
     if (e.target.closest('[data-olchartclose]')) { OL.chart = null; renderOutliers(); return; }
@@ -5493,6 +5502,46 @@ function olProj(r) {
   const extra = { nba_pr: 'P+R', nba_pa: 'P+A', nba_ra: 'R+A', rush_rec_yds: 'R+R Yds' }[r.mm]; if (extra && !keys.some(k => k[0] === r.mm)) keys.push([r.mm, extra]);
   const stats = keys.map(([m, lab]) => ({ m, lab, v: by(m)?.mean })).filter(x => x.v > 0 && (r.sport !== 'NFL' || x.v >= 0.5 || x.m === r.mm));
   return { mean: me?.mean ?? null, binP: bin?.prob ?? null, stats, mins: rows.find(x => x.mx?.min)?.mx?.min ?? null };
+}
+// full projection table for an outlier card: every projected stat with an 80% range, season and last-5 averages,
+// the stats the bet is built from highlighted, and milestone chances (double-double, 20+/30+ points, anytime TD)
+const OL_FULL_KEYS = { NBA: [['nba_pts', 'Points'], ['nba_reb', 'Rebounds'], ['nba_ast', 'Assists'], ['nba_3pm', 'Threes'], ['nba_stl', 'Steals'], ['nba_blk', 'Blocks'], ['nba_pra', 'Pts+Reb+Ast'], ['nba_pr', 'Pts+Reb'], ['nba_pa', 'Pts+Ast'], ['nba_ra', 'Reb+Ast']],
+  NFL: [['pass_yds', 'Pass yds'], ['pass_cmp', 'Completions'], ['pass_att', 'Pass att'], ['pass_td', 'Pass TD'], ['pass_int', 'Interceptions'], ['rush_yds', 'Rush yds'], ['rush_att', 'Carries'], ['rec', 'Receptions'], ['rec_yds', 'Rec yds'], ['rush_rec_yds', 'Rush+Rec yds']] };
+function olProjFull(r) {
+  if (!r.pid) return null;
+  const rows = [];
+  for (const sim of APP.simCache.values()) { if (sim.ev?.sport !== r.sport || !sim.players) continue;
+    for (const x of [...sim.players, ...(sim.players.derived || [])]) if (String(x.playerId) === String(r.pid)) rows.push(x); }
+  if (!rows.length) return null;
+  const rel = OL_PROJ_REL[r.mm] || [r.mm], st = [];
+  for (const [m, lab] of OL_FULL_KEYS[r.sport] || []) {
+    const x = rows.find(y => y.market === m && !y.binary && y.mean > 0); if (!x || (r.sport === 'NFL' && x.mean < 0.5 && m !== r.mm)) continue;
+    // counting stats (threes, steals, blocks, TDs, small means): Poisson 10th–90th percentiles; others: normal ± 1.28 effective SD
+    const pois = x.dist === 'poisson' || x.mean < 4;
+    const pq = (mu, q) => { let k = 0, p = Math.exp(-mu), c = p; while (c < q && k < 200) { k++; p *= mu / k; c += p; } return k; };
+    const sd = sdEff(x), lo = pois ? pq(x.mean, 0.1) : Math.max(0, x.mean - 1.2816 * sd), hi = pois ? pq(x.mean, 0.9) : x.mean + 1.2816 * sd;
+    const lg = logAll(r.sport, r.pid, m) || [], vs = lg.map(g => g.v).filter(v => Number.isFinite(v));
+    st.push({ m, lab, mean: x.mean, lo, hi, szn: vs.length ? anAvg(vs) : null, l5: vs.length ? anAvg(vs.slice(0, 5)) : null, n: vs.length, on: rel.includes(m), me: m === r.mm, row: x, pois });
+  }
+  const ms = rows.filter(x => x.binary && x.prob !== undefined).map(x => ({ lab: x.label, p: x.prob, on: x.market === r.mm }));
+  const me = st.find(x => x.me), pl = me && r.line !== null && r.side !== 'Yes' ? probAtLine(me.row, r.line) : null;
+  return { st, ms, pl, mins: rows.find(x => x.mx?.min)?.mx || null };
+}
+function olProjHtml(r) {
+  const F = olProjFull(r); if (!F || !F.st.length) return '';
+  const f1 = v => v === null ? '—' : (Math.round(v * 10) / 10).toFixed(1), open = STORE.olProjOpen !== false;
+  const mx = F.mins, me = F.st.find(x => x.me);
+  const head = me && r.side !== 'Yes' ? `<b class="mono sky">${f1(me.mean)}</b> <span class="mono ${(r.side === 'U' ? me.mean < r.line : me.mean > r.line) ? 'green' : 'rose'}">${me.mean - r.line > 0 ? '+' : ''}${(me.mean - r.line).toFixed(1)} vs ${r.line}</span>` : '';
+  return `<details class="ol-full" ${open ? 'open' : ''} data-olproj><summary><span>📊 Model projection</span>${head}<span class="ol-chev">▾</span></summary>
+    <table class="ol-ptbl"><thead><tr><th>Stat</th><th>Proj</th><th>80% range</th><th>Season</th><th>L5</th></tr></thead><tbody>
+      ${F.st.map(x => `<tr class="${x.on ? 'on' : ''}"><td>${esc(x.lab)}</td><td class="mono b">${f1(x.mean)}</td><td class="mono muted">${x.pois ? `${x.lo}–${x.hi}` : `${f1(x.lo)}–${f1(x.hi)}`}</td>
+        <td class="mono ${x.szn === null ? 'muted' : x.szn >= x.mean ? '' : ''}">${f1(x.szn)}</td><td class="mono ${x.l5 === null ? 'muted' : x.l5 > x.mean * 1.1 ? 'green' : x.l5 < x.mean * 0.9 ? 'rose' : ''}">${f1(x.l5)}</td></tr>`).join('')}
+      ${mx?.min ? `<tr><td>Minutes</td><td class="mono b">${f1(mx.min)}</td><td class="mono muted"></td><td class="mono">${f1(mx.minSeason ?? null)}</td><td></td></tr>` : ''}
+    </tbody></table>
+    ${F.pl ? `<div class="xs" style="margin-top:.3rem">At ${r.line}: <b class="${r.side === 'O' ? 'sky' : ''}">Over ${pct(F.pl.over)}</b> · <b class="${r.side === 'U' ? 'sky' : ''}">Under ${pct(F.pl.under)}</b>${F.pl.push > 0.005 ? ` · push ${pct(F.pl.push)}` : ''} <span class="muted">(model)</span></div>` : ''}
+    ${F.ms.length ? `<div class="ol-ms">${F.ms.map(x => `<span class="${x.on ? 'on' : ''}"><i>${esc(x.lab)}</i>${pct(x.p)}</span>`).join('')}</div>` : ''}
+    <div class="muted" style="font-size:.64rem;margin-top:.25rem">80% range = where the model expects the stat 8 times in 10 · L5 green/red = running hot/cold vs the projection</div>
+  </details>`;
 }
 async function anOpen(id) {
   const r = OL.rows.find(x => x.id === id); if (!r) return;
