@@ -111,6 +111,11 @@
   .ticker { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .35rem; }
   .tick { min-width: 168px; flex-shrink: 0; background: rgba(15,23,42,.9); border: 1px solid var(--line); border-radius: .75rem; padding: .5rem .7rem; cursor: pointer; text-align: left; }
   .tick.active { border-color: var(--green-d); background: rgba(16,185,129,.12); }
+  .gsearch { display: flex; align-items: center; gap: .4rem; flex: 1 1 260px; max-width: 420px; padding: .2rem .5rem; border: 1px solid var(--line-2); border-radius: 999px; background: #0b1220; }
+  .gsearch:focus-within { border-color: var(--sky); box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
+  .gsearch input { flex: 1; min-width: 0; border: 0; background: transparent; padding: .3rem 0; font-size: .82rem; outline: none; box-shadow: none; }
+  .gsearch input::-webkit-search-cancel-button { display: none; }
+  .gsearch button { border: 0; background: transparent; padding: 0 .2rem; color: var(--muted); }
 
   .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: .75rem; }
   table { width: 100%; border-collapse: collapse; font-size: .78rem; }
@@ -272,8 +277,14 @@
   <div id="netBanner" class="banner bad hidden"></div>
 
   <div class="card stack" id="tickerCard">
-    <div class="row between xs">
+    <div class="row between xs" style="flex-wrap:wrap;gap:.5rem">
       <span id="slateLabel" class="badge s-verified mono">SLATE</span>
+      <div class="gsearch" role="search">
+        <span aria-hidden="true">🔍</span>
+        <input id="gameSearch" type="search" placeholder="Search games: team, city or player" autocomplete="off" spellcheck="false" aria-label="Search games">
+        <span id="gameSearchCount" class="muted mono"></span>
+        <button type="button" id="gameSearchClear" class="hidden" aria-label="Clear search">✕</button>
+      </div>
       <span class="muted">Tap a game to simulate it</span>
     </div>
     <div id="ticker" class="ticker"></div>
@@ -565,6 +576,7 @@
         </div>
         <button type="button" id="tsLoadBtn" class="btn-go">Load lines</button>
       </div>
+      <div class="gsearch" role="search" style="max-width:none"><span aria-hidden="true">🔍</span><input id="tsSearch" type="search" placeholder="Search games: team, city or player" autocomplete="off" spellcheck="false" aria-label="Search games"><span id="tsSearchCount" class="muted mono xs"></span></div>
       <div class="ts-scroll" id="tsGames" role="tablist" aria-label="Games"></div>
       <nav class="ts-scroll" id="tsMkts" aria-label="Markets"></nav>
       <div class="xs"><label class="muted" for="tsPlayer">Player</label><select id="tsPlayer" class="ts-select"></select></div>
@@ -2463,10 +2475,33 @@ function tickerLine(e, L) {
   if (L.spread === null || SPORTS[e.sport].derivedSpread) return L.awayMl ? `${fmtOdds(L.awayMl)}/${fmtOdds(L.homeMl)} · O/U ${L.total ?? '—'}` : 'no line';
   return `${esc(e.homeAbbr)} ${signed(L.spread)} · O/U ${L.total ?? '—'}`;
 }
+// ---- game search: every word must match a team (abbr, city, nickname) or a player on either roster
+const gameQ = () => String(APP.q || '').toLowerCase().trim();
+const normQ = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function gameMatches(e, q = gameQ()) {
+  if (!q) return true;
+  const teams = normQ(`${e.awayAbbr} ${e.homeAbbr} ${e.awayName || ''} ${e.homeName || ''} ${e.awayAbbr}@${e.homeAbbr} ${e.awayAbbr} @ ${e.homeAbbr}`);
+  const words = normQ(q).split(/\s+/).filter(w => w && w !== '@' && w !== 'vs' && w !== 'at');
+  if (words.every(w => teams.includes(w))) return true;
+  if (q.length < 3) return false;
+  const nq = normQ(q);
+  for (const p of REG.players.values()) if (p.sport === e.sport && (String(p.teamId) === String(e.awayTeamId) || String(p.teamId) === String(e.homeTeamId)) && normQ(p.playerName).includes(nq)) return true;
+  return false;
+}
+function gameSearchHits(evs) {
+  const q = gameQ(); if (!q) return null;
+  const nq = normQ(q); if (q.length < 3) return null;
+  const hit = {};
+  for (const e of evs) for (const p of REG.players.values()) if (p.sport === e.sport && (String(p.teamId) === String(e.awayTeamId) || String(p.teamId) === String(e.homeTeamId)) && normQ(p.playerName).includes(nq)) { hit[e.eventId] = p.playerName; break; }
+  return hit;
+}
 function renderTicker() {
-  const evs = eventsForSport();
-  $('slateLabel').textContent = `${APP.sport} SLATE (${evs.length})`;
-  if (!evs.length) { $('ticker').innerHTML = `<div class="xs rose">No ${APP.sport} games returned by ESPN right now.</div>`; return; }
+  const all = eventsForSport(), evs = all.filter(e => gameMatches(e)), q = gameQ(), hits = gameSearchHits(evs) || {};
+  $('slateLabel').textContent = `${APP.sport} SLATE (${all.length})`;
+  $('gameSearchCount').textContent = q ? `${evs.length}/${all.length}` : '';
+  $('gameSearchClear').classList.toggle('hidden', !q);
+  if (!all.length) { $('ticker').innerHTML = `<div class="xs rose">No ${APP.sport} games returned by ESPN right now.</div>`; return; }
+  if (!evs.length) { $('ticker').innerHTML = `<div class="xs muted">No ${APP.sport} games match "${esc(APP.q)}". Try a team (BOS, Celtics, Boston) or a player.</div>`; return; }
   $('ticker').innerHTML = evs.map(e => {
     const L = linesFor(e);
     const live = e.state === 'in' ? '<span class="badge s-questionable">LIVE</span>' : e.state === 'post' ? '<span class="badge s-unverified">FINAL</span>' : '';
@@ -2474,7 +2509,7 @@ function renderTicker() {
     return `<button type="button" class="tick ${e.eventId === APP.eventId ? 'active' : ''}" data-ev="${esc(e.eventId)}">
       <div class="row between xs b"><span>${rosterDot(e)}${esc(e.awayAbbr)} @ ${esc(e.homeAbbr)}</span>${live}</div>
       <div class="xs muted mono">${tickerLine(e, L)}</div>
-      <div class="xs muted">${when}</div></button>`;
+      <div class="xs muted">${when}</div>${hits[e.eventId] ? `<div class="xs sky">👤 ${esc(hits[e.eventId])}</div>` : ''}</button>`;
   }).join('');
 }
 
@@ -3213,8 +3248,8 @@ function runSelected() {
    RENDER: slate, prop finder, audit
    ===================================================================== */
 function renderSlate() {
-  const evs = eventsForSport();
-  if (!evs.length) { $('slateBody').innerHTML = '<div class="inset xs muted">No games.</div>'; return; }
+  const evs = eventsForSport().filter(e => gameMatches(e));
+  if (!evs.length) { $('slateBody').innerHTML = `<div class="inset xs muted">${gameQ() ? `No games match "${esc(APP.q)}".` : 'No games.'}</div>`; return; }
   const onlyEdges = $('slateOnlyEdges').checked;
   const picks = [];
   const games = evs.map(ev => {
@@ -5470,14 +5505,15 @@ function tsStats(vals, line, side, bin) {
   return { n: vals.length, h: g.filter(hit).length, gn: g.length, avg, med, diff: bin || avg === null ? null : avg - line, diffP: bin || avg === null || !line ? null : (avg - line) / line };
 }
 function tsCtx() {
-  const S = tsF(), sp = tsSp(), evs = [...REG.events.values()].filter(e => e.sport === sp && e.state === 'pre').sort((a, b) => new Date(a.start) - new Date(b.start));
+  const S = tsF(), sp = tsSp(), evs = [...REG.events.values()].filter(e => e.sport === sp && e.state === 'pre' && gameMatches(e)).sort((a, b) => new Date(a.start) - new Date(b.start));
   const ev = evs.find(e => e.eventId === S.game) || evs[0]; if (!ev) return { evs };
   const players = [...REG.players.values()].filter(p => p.sport === sp && (String(p.teamId) === String(ev.homeTeamId) || String(p.teamId) === String(ev.awayTeamId)) && (sp !== 'NFL' || ['QB', 'RB', 'WR', 'TE'].includes(p.group)));
   const sim = APP.simCache.get(`${sp}:${ev.eventId}`), m = tsMk(S.mk);
   const fallbackMkt = sp === 'NFL' ? ({ tgt: 'rec', pry: 'pass_yds' }[m[0]] || 'rec_yds') : 'nba_pts';
   const rowOf = pid => sim?.players?.find(r => String(r.playerId) === String(pid) && r.market === (m[3] || fallbackMkt));
   players.sort((a, b) => (rowOf(b.playerId)?.mean ?? -1) - (rowOf(a.playerId)?.mean ?? -1) || a.playerName.localeCompare(b.playerName));
-  const P = players.find(p => p.playerId === S.pid) || players[0];
+  const qp = gameQ().length >= 3 ? players.find(p => normQ(p.playerName).includes(normQ(gameQ()))) : null;   // searching a player picks him
+  const P = players.find(p => p.playerId === S.pid) || qp || players[0];
   if (!P) return { evs, ev, players };
   const home = String(ev.homeTeamId) === String(P.teamId), row = m[3] ? rowOf(P.playerId) : null;
   const book = row ? STORE.propBook[row.id] : null;
@@ -5514,7 +5550,10 @@ function renderTesting() {
   const grp = X.P?.group;
   if (X.P && !tsMkFits(tsMk(S.mk), grp)) { const f0 = TS_MK_().find(m => tsMkFits(m, grp)); if (f0) { S.mk = f0[0]; X = tsCtx(); } }
   $('tsMkts').innerHTML = TS_MK_().filter(m => tsMkFits(m, grp)).map(m => `<button type="button" class="ts-chip ${S.mk === m[0] ? 'on' : ''}" data-tsmk="${m[0]}">${m[1]}</button>`).join('');
-  $('tsGames').innerHTML = (X.evs || []).map(e => `<button type="button" class="ts-game ${X.ev?.eventId === e.eventId ? 'on' : ''}" data-tsgame="${esc(e.eventId)}"><b>${esc(e.awayAbbr)} <span class="muted">@</span> ${esc(e.homeAbbr)}</b><span>${esc(new Date(e.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</span></button>`).join('') || `<span class="xs muted">No upcoming ${tsSp()} games loaded</span>`;
+  const allN = [...REG.events.values()].filter(e => e.sport === tsSp() && e.state === 'pre').length;
+  if (document.activeElement !== $('tsSearch')) $('tsSearch').value = APP.q || '';
+  $('tsSearchCount').textContent = gameQ() ? `${(X.evs || []).length}/${allN}` : '';
+  $('tsGames').innerHTML = (X.evs || []).map(e => `<button type="button" class="ts-game ${X.ev?.eventId === e.eventId ? 'on' : ''}" data-tsgame="${esc(e.eventId)}"><b>${esc(e.awayAbbr)} <span class="muted">@</span> ${esc(e.homeAbbr)}</b><span>${esc(new Date(e.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</span></button>`).join('') || (gameQ() ? `<span class="xs muted">No ${tsSp()} games match "${esc(APP.q)}"</span>` : `<span class="xs muted">No upcoming ${tsSp()} games loaded</span>`);
   $('tsGames').querySelector('.on')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   $('tsPlayer').innerHTML = (X.players || []).map(p => `<option value="${esc(p.playerId)}" ${X.P?.playerId === p.playerId ? 'selected' : ''}>${esc(p.playerName)} · ${esc(String(p.teamId) === String(X.ev.homeTeamId) ? X.ev.homeAbbr : X.ev.awayAbbr)}${p.group ? ' · ' + esc(p.group) : ''}</option>`).join('');
   $('tsStatus').innerHTML = TS.busy || TS.msg ? `<span class="${TS.busy ? 'muted' : 'amber'}">${esc(TS.msg)}</span>` : '';
@@ -5655,6 +5694,9 @@ function tsWire() {
   $('tsSport').addEventListener('click', e => { const b = e.target.closest('[data-tssp]'); if (!b || b.dataset.tssp === tsSp()) return;
     S.sp = b.dataset.tssp; S.game = ''; S.pid = ''; S.f = {}; S.line = null; S.mk = TS_MK_()[0][0]; TS.page = 0; save(); openTesting(); });
   $('tsMkts').addEventListener('click', e => { const b = e.target.closest('[data-tsmk]'); if (!b) return; S.mk = b.dataset.tsmk; TS.page = 0; rer(); });
+  let tsQT = null;
+  $('tsSearch').addEventListener('input', e => { APP.q = e.target.value; $('gameSearch').value = APP.q; clearTimeout(tsQT); tsQT = setTimeout(() => { S.game = ''; S.pid = ''; TS.page = 0; renderTesting(); renderTicker(); }, 150); });
+  $('tsSearch').addEventListener('keydown', e => { if (e.key === 'Escape') { e.target.value = APP.q = ''; $('gameSearch').value = ''; renderTesting(); renderTicker(); } });
   $('tsGames').addEventListener('click', e => { const b = e.target.closest('[data-tsgame]'); if (!b) return; S.game = b.dataset.tsgame; S.pid = ''; TS.page = 0; rer(); });
   $('tsPlayer').addEventListener('change', e => { S.pid = e.target.value; TS.page = 0; rer(); });
   $('tsLoadBtn').addEventListener('click', async () => { if (!hasOdds()) { TS.msg = 'Add your Odds API key (Prop outliers) first.'; renderTesting(); return; } TS.msg = 'Loading sportsbook lines…'; TS.busy = true; renderTesting(); try { await autoFillLines(tsSp(), false); refreshAllSims(); TS.msg = ''; } catch (e) { TS.msg = e.message; } TS.busy = false; renderTesting(); });
@@ -6763,6 +6805,16 @@ function bind() {
   $('tabSelect').addEventListener('change', e => document.querySelector(`#simTabs [data-tab="${e.target.value}"]`)?.click());
   $('simTabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { APP.tab = b.dataset.tab; renderChrome(); if (['props', 'td', 'td30'].includes(b.dataset.tab)) { refreshPlayerViews(); autoFillSoon(); } } });
   $('pfAutoBtn').addEventListener('click', () => autoFillSoon(true));
+  // game search (type / to jump to it, Esc to clear)
+  const gsApply = () => { renderTicker(); if (APP.view === 'slate') renderSlate(); if (APP.view === 'testing') renderTesting(); };
+  let gsT = null;
+  $('gameSearch').addEventListener('input', e => { APP.q = e.target.value; clearTimeout(gsT); gsT = setTimeout(gsApply, 120); });
+  $('gameSearch').addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.target.value = APP.q = ''; gsApply(); e.target.blur(); }
+    if (e.key === 'Enter') { const first = $('ticker').querySelector('[data-ev]'); if (first && APP.view === 'sim') first.click(); }
+  });
+  $('gameSearchClear').addEventListener('click', () => { $('gameSearch').value = APP.q = ''; gsApply(); $('gameSearch').focus(); });
+  document.addEventListener('keydown', e => { if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) { e.preventDefault(); $('gameSearch').focus(); } });
   $('ticker').addEventListener('click', e => { const b = e.target.closest('[data-ev]'); if (b) { APP.view = 'sim'; renderChrome(); selectEvent(b.dataset.ev); } });
   $('slateBody').addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (b) { APP.view = 'sim'; renderChrome(); selectEvent(b.dataset.open); } });
   $('slateOnlyEdges').addEventListener('change', renderSlate);
