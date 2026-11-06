@@ -140,6 +140,25 @@
   .sc-side { padding: .6rem; border-radius: .75rem; background: #0f172a; border: 1px solid #1f2937; } .sc-side.warn { border-color: rgba(251,113,133,.55); background: linear-gradient(180deg, rgba(251,113,133,.08), #0f172a 60%); }
   .sc-inj { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .3rem; font-size: .76rem; } .sc-inj .muted { font-size: .7rem; }
   .sc-tbl tr.sc-b2 { background: rgba(251,113,133,.10); } .sc-tbl tr.sc-b1 { background: rgba(251,191,36,.07); } .sc-tbl tr.sc-today td:first-child { box-shadow: inset 3px 0 0 var(--sky); }
+  .ms-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: .6rem; }
+  .ms-team { border: 1px solid #1f2937; border-radius: .8rem; background: #0b1220; padding: .55rem; display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+  .ms-head { display: flex; justify-content: space-between; align-items: center; gap: .4rem; flex-wrap: wrap; } .ms-abbr { font-size: 1.05rem; }
+  .ms-chips { display: flex; gap: .25rem; flex-wrap: wrap; } .ms-chips span { display: inline-flex; gap: .25rem; align-items: baseline; padding: .1rem .4rem; border-radius: .35rem; border: 1px solid #1f2937; font-family: ui-monospace, monospace; font-size: .74rem; } .ms-chips i { font-style: normal; color: var(--muted); font-size: .62rem; font-family: inherit; }
+  .ms-tbl { width: 100%; border-collapse: collapse; font-size: .76rem; } .ms-tbl th { font-size: .62rem; color: var(--muted); font-weight: 600; text-align: right; padding: .2rem .3rem; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+  .ms-tbl th:first-child, .ms-tbl td:first-child { text-align: left; } .ms-tbl td { padding: .22rem .3rem; text-align: right; border-top: 1px solid #141c2b; white-space: nowrap; }
+  .ms-name { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; } .ms-out td { opacity: .45; }
+  .ms-div td { font-size: .62rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); background: #0f172a; text-align: left !important; }
+  .ms-cell { display: inline-flex; align-items: center; gap: .25rem; justify-content: flex-end; }
+  .ms-rk { display: inline-block; min-width: 1.35rem; text-align: center; font-style: normal; font-size: .62rem; font-weight: 700; padding: .05rem .2rem; border-radius: .3rem; font-family: ui-monospace, monospace; }
+  .h1 { background: rgba(244,63,94,.32); color: #fecdd3; } .h2 { background: rgba(244,63,94,.15); color: #fda4af; } .h3 { background: rgba(148,163,184,.12); color: #cbd5e1; } .h4 { background: rgba(52,211,153,.15); color: #6ee7b7; } .h5 { background: rgba(52,211,153,.32); color: #d1fae5; }
+  .ms-zones { display: flex; flex-direction: column; gap: .25rem; } .ms-zrow { display: grid; grid-template-columns: repeat(5, 1fr); gap: .25rem; }
+  .ms-zrow div { display: flex; flex-direction: column; align-items: center; padding: .25rem .1rem; border-radius: .4rem; border: 1px solid #1f2937; } .ms-zrow i { font-style: normal; font-size: .58rem; color: inherit; opacity: .8; white-space: nowrap; } .ms-zrow b { font-family: ui-monospace, monospace; font-size: .9rem; }
+  .ms-legend { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+  .ms-scroll { max-height: 26rem; overflow: auto; } .ms-slate thead th { position: sticky; top: 0; background: #0b1220; z-index: 1; }
+  .ms-sort { background: transparent; border: 0; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; } .ms-sort.on { color: var(--sky); }
+  .ms-big-g { color: #d1fae5; background: rgba(52,211,153,.18); font-weight: 700; } .ms-big-r { color: #fecdd3; background: rgba(244,63,94,.16); font-weight: 700; }
+  @media (max-width: 640px) { .ms-grid { grid-template-columns: 1fr; } .ms-tbl { font-size: .72rem; } .ms-name { max-width: 7.5rem; } .ms-zrow i { font-size: .5rem; }
+    .ms-tbl td:first-child, .ms-tbl th:first-child { position: sticky; left: 0; background: #0b1220; z-index: 1; box-shadow: 1px 0 0 #1f2937; } }
   .sim-drops { display: flex; flex-direction: column; gap: .5rem; }
   .sim-drop { padding: 0; overflow: hidden; } .sim-drop > summary { display: flex; align-items: center; gap: .6rem; padding: .75rem .9rem; transition: background .15s; }
   .sim-drop > summary:hover { background: rgba(148,163,184,.05); } .sim-drop > summary::-webkit-details-marker { display: none; }
@@ -332,6 +351,13 @@
           <span class="muted" id="lineSource"></span>
           <button type="button" id="resetLinesBtn">Reset to ESPN lines</button>
         </div>
+      </div>
+    </details>
+    <details class="card sim-drop" data-drop="sheet">
+      <summary><span class="sim-drop-t">📋 Matchup Sheet</span><span class="xs muted">lineups, opponent ranks, shot zones &amp; slate projections</span><span class="sim-chev" aria-hidden="true">▾</span></summary>
+      <div class="sim-drop-body stack" style="gap:.5rem">
+        <span class="seg ts-seg sm2" id="msTabs" style="align-self:flex-start"><button type="button" data-msview="game" class="on">This game</button><button type="button" data-msview="slate">Slate projections</button></span>
+        <div id="msBody"></div>
       </div>
     </details>
     <details class="card sim-drop" data-drop="ratings">
@@ -1187,7 +1213,7 @@ async function fetchRoster(ev, side) {
     const inj = Array.isArray(a.injuries) ? a.injuries : [];
     const rawStatus = inj[0]?.status || a.status?.type?.name || a.status?.name || 'Active';
     recs.push({
-      playerId: String(a.id), playerName: String(name).trim(), teamId, teamAbbr: abbr, sport, group,
+      playerId: String(a.id), playerName: String(name).trim(), teamId, teamAbbr: abbr, sport, group, posAbbr: String(a.position?.abbreviation || ''),
       jersey: a.jersey || '', exp: +(a.experience?.years ?? 0) || 0, status: mapStatus(rawStatus, inj.length > 0),
       depthRank: null, useScore: null,
       injuryNote: inj[0] ? `${inj[0].status || 'Note'}: ${inj[0].shortComment || inj[0].longComment || inj[0].details?.type || 'reported'}` : null,
@@ -2141,6 +2167,19 @@ function parseBox(sport, d) {
       const fg = plays.find(p => p.scoringPlay && (p.scoreValue ?? 2) >= 2);
       if (jumpers.length === 2 && poss) B.tip = { j: jumpers.map(id => ({ id, t: teamOfAth[id], n: nameOfAth[id] })), poss, first: fg ? String(fg.team?.id || '') : null };
     }
+    // field-goal attempts by zone per team: [restricted area, paint (non-RA), midrange, corner 3, wing/top 3] — from ESPN's play text
+    B.zn = {};
+    for (const p of plays) {
+      if (!p.shootingPlay) continue;
+      const tx = `${p.type?.text || ''} ${p.text || ''}`.toLowerCase(); if (/free throw/.test(tx)) continue;
+      const tid = String(p.team?.id || ''); if (!tid) continue;
+      const ft = +((tx.match(/(\d+)-foot/) || [])[1] ?? NaN), three = /three point|3-pt|3pt/.test(tx) || p.scoreValue === 3;
+      let z;
+      if (three) z = Number.isFinite(ft) && ft <= 22 ? 3 : 4;   // 22 ft is only possible in the corner
+      else if (Number.isFinite(ft)) z = ft <= 4 ? 0 : ft <= 14 ? 1 : 2;
+      else z = /layup|dunk|tip|alley|putback|finger roll/.test(tx) ? 0 : /hook|floater|floating/.test(tx) ? 1 : 2;
+      (B.zn[tid] ||= [0, 0, 0, 0, 0])[z]++;
+    }
     B.fs = {};   // per team: who took its first field-goal attempt and who made its first field goal
     for (const p of plays.slice(0, 80)) {
       if (!p.shootingPlay || /free throw/i.test(p.type?.text || p.text || '')) continue;
@@ -2218,7 +2257,7 @@ function parseBox(sport, d) {
 async function ensureBoxes(events, perTeam = 6) {
   const sport = events[0]?.sport; if (!['NBA', 'NFL', 'NHL'].includes(sport) || BOX.busy) return 0;
   const c = boxCache(), want = new Set();
-  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && (!c[`${sport}:${g.id}`] || ((sport === 'NFL' && c[`${sport}:${g.id}`].pl === undefined) || sport === 'NBA' && (c[`${sport}:${g.id}`].tip === undefined || c[`${sport}:${g.id}`].fs === undefined || c[`${sport}:${g.id}`].pl === undefined || (c[`${sport}:${g.id}`].pl[0] && c[`${sport}:${g.id}`].pl[0].length < 16))))) want.add(g.id);
+  for (const ev of events) for (const tid of [ev.awayTeamId, ev.homeTeamId]) for (const g of teamGames(sport, tid).slice(0, perTeam)) if (g.id && (!c[`${sport}:${g.id}`] || ((sport === 'NFL' && c[`${sport}:${g.id}`].pl === undefined) || sport === 'NBA' && (c[`${sport}:${g.id}`].tip === undefined || c[`${sport}:${g.id}`].fs === undefined || c[`${sport}:${g.id}`].pl === undefined || (c[`${sport}:${g.id}`].pl[0] && c[`${sport}:${g.id}`].pl[0].length < 16) || c[`${sport}:${g.id}`].zn === undefined)))) want.add(g.id);
   if (!want.size) return 0;
   BOX.busy = true;
   const queue = [...want]; let n = 0;
@@ -2611,6 +2650,7 @@ function renderSetup() {
     : ev.odds.provider ? `Lines from ESPN (${ev.odds.provider})${ev.odds.assumed ? '. ESPN posted no spread/total prices, so −110 is assumed. Add your Odds API key for real prices.' : '.'}` : 'ESPN has no lines for this game — type them in.';
   renderTeamPanel(ev, 'away');
   renderTeamPanel(ev, 'home');
+  msRender();
 }
 
 /* =====================================================================
@@ -5204,7 +5244,7 @@ async function anEnsureLeague(sp, onProgress) {
   const teams = anTeams(sp);
   const posJob = sp === 'NFL' ? anNflPositions(teams) : null;
   const c = boxCache(), t0 = AN_SP[sp].start().getTime(), want = new Set();
-  for (const tid of teams) for (const g of teamGames(sp, tid).filter(g => new Date(g.date).getTime() >= t0).slice(0, 20)) if (!c[`${sp}:${g.id}`]?.pl || (sp === 'NBA' && c[`${sp}:${g.id}`].pl[0] && c[`${sp}:${g.id}`].pl[0].length < 16)) want.add(g.id);
+  for (const tid of teams) for (const g of teamGames(sp, tid).filter(g => new Date(g.date).getTime() >= t0).slice(0, 20)) if (!c[`${sp}:${g.id}`]?.pl || (sp === 'NBA' && ((c[`${sp}:${g.id}`].pl[0] && c[`${sp}:${g.id}`].pl[0].length < 16) || c[`${sp}:${g.id}`].zn === undefined))) want.add(g.id);
   const total = want.size, queue = [...want]; let done = 0, n = 0;
   if (total) {
     const tick = () => { AN.msg = `Loading this season's ${sp} box scores from ESPN: ${done}/${total} games (first time only)…`; anPaint(); };
@@ -5927,6 +5967,132 @@ function scWire() {
   });
   $('scBody').addEventListener('change', e => { if (e.target.id === 'scPast') { STORE.scPast = e.target.checked; save(); renderSched(); } });
 }
+/* =====================================================================
+   📋 MATCHUP SHEET (Simulator, NBA) — per game: each team's starters + top bench with season averages
+   (MIN/PTS/REB/AST/3PM/USG%), tonight's opponent's last-14-day rank vs his position for each stat,
+   the opponent defense's field-goal attempts allowed by zone (last 30 days), pace, lines.
+   Slate view: projection tables (model projection vs the books' line, diff, diff %, matchup rank).
+   All from this season's ESPN box scores + the model. Rank 1 = allows the least (tough), 30 = allows the most.
+   ===================================================================== */
+const MS = { view: 'game', mk: 'pts', sort: 'dp', dir: -1, loading: false, key: null, d: null };
+const MS_ST = [['pts', 'PTS', l => l.pts], ['reb', 'REB', l => l.reb], ['ast', 'AST', l => l.ast], ['tpm', '3PM', l => l.tpm]];
+const MS_ZONES = ['Restricted', 'Paint', 'Midrange', 'Corner 3', 'Wing/Top 3'];
+function msData() {
+  const key = `${BOX.ver}|${Object.keys(boxCache()).length}`; if (MS.key === key && MS.d) return MS.d;
+  const t0 = AN_SP.NBA.start().getTime(), P = {}, T = {};
+  for (const [k, b] of Object.entries(boxCache())) {
+    if (!k.startsWith('NBA:') || !b.pl?.length || !b.date) continue;
+    const dt = new Date(b.date).getTime(); if (dt < t0) continue;
+    const L = b.pl.map(a => AN_SP.NBA.line(a)), tids = [...new Set(L.map(l => l.team))]; if (tids.length !== 2) continue;
+    const tot = {};
+    for (const tid of tids) { const ls = L.filter(l => l.team === tid); tot[tid] = { poss: ls.reduce((x, l) => x + (l.fga || 0) + 0.44 * (l.fta || 0) + (l.to || 0), 0), min: ls.reduce((x, l) => x + l.min, 0), hasU: ls.some(l => l.fga !== undefined) }; }
+    for (const l of L) {
+      const o = (P[l.id] ||= { id: l.id, name: l.name, team: l.team, pos: l.pos, g: 0, min: 0, pts: 0, reb: 0, ast: 0, tpm: 0, up: 0, ud: 0, last: 0 });
+      o.g++; o.min += l.min; o.pts += l.pts; o.reb += l.reb; o.ast += l.ast; o.tpm += l.tpm;
+      if (dt >= o.last) { o.last = dt; o.team = l.team; }
+      const tm = tot[l.team];   // usage % = his plays used (FGA + 0.44·FTA + TO) / the team's while he was on the floor
+      if (tm.hasU && tm.poss > 0 && tm.min > 0) { o.up += (l.fga || 0) + 0.44 * (l.fta || 0) + (l.to || 0); o.ud += l.min * tm.poss * 5 / tm.min; }
+    }
+    for (const tid of tids) { const opp = tids.find(x => x !== tid);
+      (T[tid] ||= []).push({ dt, against: L.filter(l => l.team === opp), zn: b.zn?.[opp] || null, poss: (tot[tid].poss + tot[opp].poss) / 2 }); }
+  }
+  MS.key = key; MS.d = { P, T }; return MS.d;
+}
+// rank every team (1 = allows the least) on a per-game average over the last `days` (falls back to the season when < 3 games)
+function msRank(days, f) {
+  const { T } = msData(), cut = Date.now() - days * 864e5, vals = {};
+  for (const [tid, gs] of Object.entries(T)) { let w = gs.filter(g => g.dt >= cut); if (w.length < 3) w = gs; if (w.length < 2) continue; const xs = w.map(f).filter(v => v !== null); if (xs.length) vals[tid] = anAvg(xs); }
+  const sorted = Object.values(vals).sort((a, b) => a - b), out = {};
+  for (const [tid, v] of Object.entries(vals)) out[tid] = { r: sorted.filter(x => x < v - 1e-9).length + 1, of: sorted.length, v };
+  return out;
+}
+const msPosRanks = {};
+function msPosRank(stat, pos) {
+  const k = `${stat}|${pos}|${MS.key}`; if (msPosRanks[k]) return msPosRanks[k];
+  const f = MS_ST.find(x => x[0] === stat)[2];
+  return (msPosRanks[k] = msRank(14, g => g.against.filter(l => !pos || l.pos === pos).reduce((a, l) => a + f(l), 0)));
+}
+const msHeat = (r, of) => { if (!r) return ''; const t = (r - 1) / Math.max(1, of - 1); return t >= 0.8 ? 'h5' : t >= 0.6 ? 'h4' : t >= 0.4 ? 'h3' : t >= 0.2 ? 'h2' : 'h1'; };   // h5 = allows the most (good for the player)
+function msPlayer(rec, oppId) {
+  const { P } = msData(), o = P[rec.playerId], pos = ['G', 'F', 'C'].includes(rec.group) ? rec.group : o?.pos || null;
+  const avg = k => o && o.g ? o[k] / o.g : null;
+  return { name: rec.playerName, pa: rec.posAbbr || rec.group || '', pos, g: o?.g || 0, min: avg('min'), st: MS_ST.map(([k]) => ({ k, v: avg(k), rk: pos ? msPosRank(k, pos)[oppId] : null })), usg: o && o.ud > 0 ? o.up / o.ud : null, status: rec.status };
+}
+function msTeamBlock(ev, side) {
+  const tid = String(side === 'home' ? ev.homeTeamId : ev.awayTeamId), oppId = String(side === 'home' ? ev.awayTeamId : ev.homeTeamId);
+  const abbr = side === 'home' ? ev.homeAbbr : ev.awayAbbr, name = side === 'home' ? ev.homeName : ev.awayName, oppAbbr = side === 'home' ? ev.awayAbbr : ev.homeAbbr;
+  const slots = buildSlots('NBA', tid, ev), starters = slots.filter(s => /^S/.test(s.slot) && s.player), bench = slots.filter(s => /^B/.test(s.slot) && s.player).slice(0, 2);
+  const L = linesFor(ev), ml = side === 'home' ? L.homeMl : L.awayMl, spread = L.spread === null ? null : side === 'home' ? L.spread : -L.spread;
+  const pace = msRank(3650, g => g.poss)[tid], paceR = pace ? pace.of + 1 - pace.r : null;   // pace: 1 = fastest
+  const zoneR = MS_ZONES.map((_, z) => msRank(30, g => g.zn ? g.zn[z] : null)[oppId]);   // tonight's opponent defense: FGA allowed by zone
+  const row = s => { const x = msPlayer(s.player, oppId), out = /out|doubt/i.test(x.status || '');
+    return `<tr class="${out ? 'ms-out' : ''}"><td class="ms-name"><b>${esc(x.name)}</b> <span class="muted">${esc(x.pa)}</span>${out ? ' <span class="rose">OUT</span>' : ''}</td><td class="mono">${x.min === null ? '—' : x.min.toFixed(1)}</td>
+      ${x.st.map(c => `<td><div class="ms-cell"><span class="mono">${c.v === null ? '—' : c.v.toFixed(1)}</span>${c.rk ? `<i class="ms-rk ${msHeat(c.rk.r, c.rk.of)}" title="${esc(oppAbbr)} is #${c.rk.r} of ${c.rk.of} in ${c.k.toUpperCase()} allowed to ${x.pos === 'G' ? 'guards' : x.pos === 'F' ? 'forwards' : 'centers'}, last 14 days (30 = allows the most)">${c.rk.r}</i>` : ''}</div></td>`).join('')}
+      <td class="mono">${x.usg === null ? '—' : (x.usg * 100).toFixed(1) + '%'}</td></tr>`; };
+  return `<div class="ms-team">
+    <div class="ms-head"><div><b class="ms-abbr">${esc(abbr)}</b> <span class="xs muted">${esc(name || '')} · ${side === 'home' ? 'home' : 'away'}</span></div>
+      <div class="ms-chips"><span><i>ML</i>${ml ? fmtOdds(ml) : '—'}</span><span><i>Spread</i>${spread === null ? '—' : signed(spread)}</span><span><i>Total</i>${L.total ?? '—'}</span><span class="${paceR ? msHeat(pace.r, pace.of) : ''}"><i>Pace</i>${paceR ? '#' + paceR : '—'}</span></div></div>
+    <div class="table-wrap"><table class="ms-tbl"><thead><tr><th>Player</th><th>MIN</th>${MS_ST.map(x => `<th>${x[1]}</th>`).join('')}<th>USG%</th></tr></thead>
+      <tbody>${starters.map(row).join('') || `<tr><td colspan="7" class="muted">Lineup not loaded yet.</td></tr>`}${bench.length ? `<tr class="ms-div"><td colspan="7">Bench</td></tr>${bench.map(row).join('')}` : ''}</tbody></table></div>
+    <div class="ms-zones"><div class="xs muted">${esc(oppAbbr)} defense · FGA allowed by zone, last 30 days (#1 = fewest)</div>
+      <div class="ms-zrow">${MS_ZONES.map((z, i) => `<div class="${zoneR[i] ? msHeat(zoneR[i].r, zoneR[i].of) : ''}"><i>${z}</i><b>${zoneR[i] ? zoneR[i].r : '—'}</b></div>`).join('')}</div></div>
+  </div>`;
+}
+function msSlate() {
+  const mk = MS.mk, mm = { pts: 'nba_pts', reb: 'nba_reb', ast: 'nba_ast', tpm: 'nba_3pm' }[mk], rows = [];
+  for (const sim of APP.simCache.values()) {
+    if (sim.ev?.sport !== 'NBA' || sim.ev.state !== 'pre' || !sim.players || !gameMatches(sim.ev)) continue;
+    for (const r of sim.players) {
+      if (r.market !== mm || !(r.mean > 0)) continue;
+      const rec = [...REG.players.values()].find(p => p.sport === 'NBA' && p.playerId === String(r.playerId));
+      const home = rec ? String(rec.teamId) === String(sim.ev.homeTeamId) : null, oppId = home === null ? null : String(home ? sim.ev.awayTeamId : sim.ev.homeTeamId);
+      const pos = rec && ['G', 'F', 'C'].includes(rec.group) ? rec.group : null, rk = pos && oppId ? msPosRank(mk, pos)[oppId] : null;
+      const line = STORE.propBook[r.id]?.line ?? null, diff = line === null ? null : r.mean - line;
+      rows.push({ name: r.name, team: rec?.teamAbbr || '', game: `${sim.ev.awayAbbr}@${sim.ev.homeAbbr}`, pa: rec?.posAbbr || rec?.group || '', rk, proj: r.mean, line, diff, dp: diff === null || !line ? null : diff / line });
+    }
+  }
+  const key = MS.sort, dir = MS.dir, val = r => key === 'rk' ? r.rk?.r ?? null : r[key];
+  rows.sort((a, b) => { const x = val(a), y = val(b); if (x === null && y === null) return b.proj - a.proj; if (x === null) return 1; if (y === null) return -1; return typeof x === 'string' ? dir * x.localeCompare(y) : dir * (x - y); });
+  const th = (k, lab) => `<th><button type="button" class="ms-sort ${MS.sort === k ? 'on' : ''}" data-mssort="${k}">${lab}${MS.sort === k ? (MS.dir < 0 ? ' ▾' : ' ▴') : ''}</button></th>`;
+  const lab = MS_ST.find(x => x[0] === mk)[1], noLines = !rows.some(r => r.line !== null);
+  return `<div class="row between" style="gap:.4rem;flex-wrap:wrap;margin-bottom:.4rem"><div class="ts-scroll">${MS_ST.map(([k, l]) => `<button type="button" class="ts-chip ${MS.mk === k ? 'on' : ''}" data-msmk="${k}">${l} projections</button>`).join('')}</div>
+      ${noLines ? '<button type="button" class="xs btn-soft" data-mslines>Load lines</button>' : ''}</div>
+    ${rows.length ? `<div class="table-wrap ms-scroll"><table class="ms-tbl ms-slate"><thead><tr>${th('name', 'Player')}${th('game', 'Game')}${th('rk', 'Matchup')}${th('proj', lab + ' proj')}${th('line', 'Line')}${th('diff', 'Diff')}${th('dp', 'Diff %')}</tr></thead><tbody>
+      ${rows.map(r => `<tr><td class="ms-name"><b>${esc(r.name)}</b> <span class="muted">${esc(r.team)} ${esc(r.pa)}</span></td><td class="mono muted">${esc(r.game)}</td>
+        <td>${r.rk ? `<i class="ms-rk ${msHeat(r.rk.r, r.rk.of)}">${r.rk.r}</i>` : '—'}</td><td class="mono b">${r.proj.toFixed(2)}</td><td class="mono">${r.line ?? '—'}</td>
+        <td class="mono ${r.diff === null ? 'muted' : r.diff > 0 ? 'green' : 'rose'}">${r.diff === null ? '—' : (r.diff > 0 ? '+' : '') + r.diff.toFixed(2)}</td>
+        <td class="mono ${r.dp === null ? 'muted' : Math.abs(r.dp) >= 0.3 ? (r.dp > 0 ? 'ms-big-g' : 'ms-big-r') : r.dp > 0 ? 'green' : 'rose'}">${r.dp === null ? '—' : (r.dp > 0 ? '+' : '') + (r.dp * 100).toFixed(1) + '%'}</td></tr>`).join('')}
+    </tbody></table></div>` : '<div class="xs muted">No NBA projections on the slate yet.</div>'}
+    <div class="xs muted" style="margin-top:.35rem">Proj = the model's projection (no betting lines inside). Matchup = opponent's rank in this stat allowed to the player's position, last 14 days (30 = allows the most). Tap a column to sort.${noLines ? ' Lines appear after Load lines (uses Odds API credits).' : ''}</div>`;
+}
+function msRender() {
+  const box = $('msBody'); if (!box || !document.querySelector('[data-drop="sheet"]')?.open) return;
+  const ev = currentEvent();
+  $('msTabs').querySelectorAll('[data-msview]').forEach(b => b.classList.toggle('on', b.dataset.msview === MS.view));
+  if (APP.sport !== 'NBA') { box.innerHTML = '<div class="xs muted">The matchup sheet is NBA only. Pick NBA at the top.</div>'; return; }
+  const ready = TS.ready?.NBA, have = Object.keys(msData().T).length >= 10;
+  const note = ready ? '' : `<div class="xs muted" style="margin-bottom:.4rem">${MS.loading ? `Loading this season's box scores${TS.prog?.NBA ? ` (${TS.prog.NBA.d}/${TS.prog.NBA.t})` : ''}… numbers fill in as they arrive.` : ''}</div>`;
+  if (!have && !ready) { box.innerHTML = note || '<div class="xs muted">Loading…</div>'; msLoad(); return; }
+  if (MS.view === 'slate') { box.innerHTML = note + msSlate(); return; }
+  if (!ev) { box.innerHTML = '<div class="xs muted">Pick a game in the slate above.</div>'; return; }
+  box.innerHTML = note + `<div class="ms-grid">${msTeamBlock(ev, 'away')}${msTeamBlock(ev, 'home')}</div>
+    <div class="ms-legend xs muted"><span>Small colored numbers = opponent's rank vs his position, last 14 days:</span><i class="ms-rk h1">1</i> tough <i class="ms-rk h3">15</i> <i class="ms-rk h5">30</i> soft (allows the most) · USG% from box scores · zones from ESPN play-by-play</div>`;
+  if (!ready) msLoad();
+}
+async function msLoad() {
+  if (MS.loading || TS.ready?.NBA) return; MS.loading = true; TS.ready ||= {}; TS.prog ||= {};
+  try { await anEnsureLeague('NBA', (d, t) => { TS.prog.NBA = { d, t }; msRender(); }); TS.ready.NBA = true; delete TS.prog.NBA; } catch {}
+  MS.loading = false; msRender();
+}
+function msWire() {
+  $('msTabs').addEventListener('click', e => { const b = e.target.closest('[data-msview]'); if (b) { MS.view = b.dataset.msview; msRender(); } });
+  $('msBody').addEventListener('click', async e => {
+    const m = e.target.closest('[data-msmk]'); if (m) { MS.mk = m.dataset.msmk; msRender(); return; }
+    const s = e.target.closest('[data-mssort]'); if (s) { const k = s.dataset.mssort; if (MS.sort === k) MS.dir *= -1; else { MS.sort = k; MS.dir = k === 'name' || k === 'game' ? 1 : -1; } msRender(); return; }
+    if (e.target.closest('[data-mslines]')) { if (!hasOdds()) { e.target.textContent = 'Add your Odds API key first'; return; } e.target.disabled = true; e.target.textContent = 'Loading lines…'; try { await autoFillLines('NBA', false); refreshAllSims(); } catch {} msRender(); }
+  });
+  document.querySelector('[data-drop="sheet"]').addEventListener('toggle', () => msRender());
+}
 function paFromOutlier(o) {
   const mm = o.mm; if (!mm) return null;
   const dd = mm === 'nba_dd'; if (o.side === 'Yes' && !dd) return null;
@@ -5960,7 +6126,7 @@ function bindAnalyzer() {
   $('paGame').addEventListener('change', e => { STORE.pa.game = e.target.value; save(); renderAnalyzer(); });
   $('paSort').addEventListener('change', e => { STORE.pa.sort = e.target.value; save(); renderAnalyzer(); });
   $('paSearch').addEventListener('input', e => { STORE.pa.q = e.target.value; save(); renderAnalyzer(); });
-  tsWire(); scWire();
+  tsWire(); scWire(); msWire();
   $('paLoadBtn').addEventListener('click', () => { if (!hasOdds()) { PA.msg = 'Add your Odds API key (Prop outliers) first.'; renderAnalyzer(); return; } openAnalyzer(true); });
   $('paBody').addEventListener('click', e => {
     if (e.target.closest('[data-pareset]')) return;   // (handled at document level)

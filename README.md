@@ -96,3 +96,11 @@ Every team's season schedule from ESPN (cached 6 hours) with back-to-backs flagg
 1st night), 3-games-in-4-nights stretches and rest days. Pick a day (next 14) to see each game's rest
 situation and ESPN's injury report (Out / Day-To-Day) for both teams; a team schedule table with season and
 remaining B2B counts; and a league overview of remaining back-to-backs. Days are Eastern time.
+
+## 📋 Matchup Sheet (Simulator, NBA)
+Dropdown under Lines. *This game*: each team's starting five + top two bench with season averages (MIN, PTS,
+REB, AST, 3PM, USG%) from this season's box scores; next to each stat, tonight's opponent's rank in that stat
+allowed to the player's position over the last 14 days (1 = allows the least, 30 = the most; red→green);
+the opponent defense's field-goal attempts allowed by zone (restricted, paint, midrange, corner 3, wing/top 3;
+last 30 days, from ESPN play-by-play text); ML, spread, total and pace rank. *Slate projections*: PTS / REB /
+AST / 3PM tables for every game — matchup rank, model projection, books' line, diff and diff %, sortable.
