@@ -146,7 +146,8 @@
   .ms-chips { display: flex; gap: .25rem; flex-wrap: wrap; } .ms-chips span { display: inline-flex; gap: .25rem; align-items: baseline; padding: .1rem .4rem; border-radius: .35rem; border: 1px solid #1f2937; font-family: ui-monospace, monospace; font-size: .74rem; } .ms-chips i { font-style: normal; color: var(--muted); font-size: .62rem; font-family: inherit; }
   .ms-tbl { width: 100%; border-collapse: collapse; font-size: .76rem; } .ms-tbl th { font-size: .62rem; color: var(--muted); font-weight: 600; text-align: right; padding: .2rem .3rem; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
   .ms-tbl th:first-child, .ms-tbl td:first-child { text-align: left; } .ms-tbl td { padding: .22rem .3rem; text-align: right; border-top: 1px solid #141c2b; white-space: nowrap; }
-  .ms-name { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; } .ms-out td { opacity: .45; }
+  .ms-name { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; }
+  .ms-nfl .ms-div td { text-align: right !important; } .ms-nfl .ms-div td:first-child { text-align: left !important; color: #e2e8f0; font-weight: 700; } .ms-out td { opacity: .45; }
   .ms-div td { font-size: .62rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); background: #0f172a; text-align: left !important; }
   .ms-cell { display: inline-flex; align-items: center; gap: .25rem; justify-content: flex-end; }
   .ms-rk { display: inline-block; min-width: 1.35rem; text-align: center; font-style: normal; font-size: .62rem; font-weight: 700; padding: .05rem .2rem; border-radius: .3rem; font-family: ui-monospace, monospace; }
@@ -6051,45 +6052,134 @@ function msSlate() {
       rows.push({ name: r.name, team: rec?.teamAbbr || '', game: `${sim.ev.awayAbbr}@${sim.ev.homeAbbr}`, pa: rec?.posAbbr || rec?.group || '', rk, proj: r.mean, line, diff, dp: diff === null || !line ? null : diff / line });
     }
   }
+  return msTableHtml(rows, MS_ST.map(x => [x[0], x[1]]), mk, 'data-msmk', MS_ST.find(x => x[0] === mk)[1], 'last 14 days');
+}
+function msTableHtml(rows, tabs, cur, attr, lab, win) {
   const key = MS.sort, dir = MS.dir, val = r => key === 'rk' ? r.rk?.r ?? null : r[key];
   rows.sort((a, b) => { const x = val(a), y = val(b); if (x === null && y === null) return b.proj - a.proj; if (x === null) return 1; if (y === null) return -1; return typeof x === 'string' ? dir * x.localeCompare(y) : dir * (x - y); });
-  const th = (k, lab) => `<th><button type="button" class="ms-sort ${MS.sort === k ? 'on' : ''}" data-mssort="${k}">${lab}${MS.sort === k ? (MS.dir < 0 ? ' ▾' : ' ▴') : ''}</button></th>`;
-  const lab = MS_ST.find(x => x[0] === mk)[1], noLines = !rows.some(r => r.line !== null);
-  return `<div class="row between" style="gap:.4rem;flex-wrap:wrap;margin-bottom:.4rem"><div class="ts-scroll">${MS_ST.map(([k, l]) => `<button type="button" class="ts-chip ${MS.mk === k ? 'on' : ''}" data-msmk="${k}">${l} projections</button>`).join('')}</div>
+  const th = (k, l) => `<th><button type="button" class="ms-sort ${MS.sort === k ? 'on' : ''}" data-mssort="${k}">${l}${MS.sort === k ? (MS.dir < 0 ? ' ▾' : ' ▴') : ''}</button></th>`;
+  const noLines = !rows.some(r => r.line !== null);
+  return `<div class="row between" style="gap:.4rem;flex-wrap:wrap;margin-bottom:.4rem"><div class="ts-scroll">${tabs.map(([k, l]) => `<button type="button" class="ts-chip ${cur === k ? 'on' : ''}" ${attr}="${k}">${l}</button>`).join('')}</div>
       ${noLines ? '<button type="button" class="xs btn-soft" data-mslines>Load lines</button>' : ''}</div>
     ${rows.length ? `<div class="table-wrap ms-scroll"><table class="ms-tbl ms-slate"><thead><tr>${th('name', 'Player')}${th('game', 'Game')}${th('rk', 'Matchup')}${th('proj', lab + ' proj')}${th('line', 'Line')}${th('diff', 'Diff')}${th('dp', 'Diff %')}</tr></thead><tbody>
       ${rows.map(r => `<tr><td class="ms-name"><b>${esc(r.name)}</b> <span class="muted">${esc(r.team)} ${esc(r.pa)}</span></td><td class="mono muted">${esc(r.game)}</td>
         <td>${r.rk ? `<i class="ms-rk ${msHeat(r.rk.r, r.rk.of)}">${r.rk.r}</i>` : '—'}</td><td class="mono b">${r.proj.toFixed(2)}</td><td class="mono">${r.line ?? '—'}</td>
         <td class="mono ${r.diff === null ? 'muted' : r.diff > 0 ? 'green' : 'rose'}">${r.diff === null ? '—' : (r.diff > 0 ? '+' : '') + r.diff.toFixed(2)}</td>
         <td class="mono ${r.dp === null ? 'muted' : Math.abs(r.dp) >= 0.3 ? (r.dp > 0 ? 'ms-big-g' : 'ms-big-r') : r.dp > 0 ? 'green' : 'rose'}">${r.dp === null ? '—' : (r.dp > 0 ? '+' : '') + (r.dp * 100).toFixed(1) + '%'}</td></tr>`).join('')}
-    </tbody></table></div>` : '<div class="xs muted">No NBA projections on the slate yet.</div>'}
-    <div class="xs muted" style="margin-top:.35rem">Proj = the model's projection (no betting lines inside). Matchup = opponent's rank in this stat allowed to the player's position, last 14 days (30 = allows the most). Tap a column to sort.${noLines ? ' Lines appear after Load lines (uses Odds API credits).' : ''}</div>`;
+    </tbody></table></div>` : '<div class="xs muted">No projections on the slate yet.</div>'}
+    <div class="xs muted" style="margin-top:.35rem">Proj = the model's projection (no betting lines inside). Matchup = opponent's rank in this stat allowed to the player's position, ${win} (highest = allows the most). Tap a column to sort.${noLines ? ' Lines appear after Load lines (uses Odds API credits).' : ''}</div>`;
+}
+/* ---- NFL matchup sheet: QB / RBs / WRs / TE with season per-game stats, each tagged with tonight's opponent's rank
+   in that stat allowed to the position over its last 5 games; the opponent defense's yards / points allowed ranks. */
+const MSN = { key: null, d: null, rk: {} };
+const MSN_ROLE = {
+  QB: { n: 1, cols: [['cmp', 'CMP'], ['att', 'ATT'], ['pyd', 'PASS YDS'], ['ptd', 'PASS TD'], ['ryd', 'RUSH YDS']], vol: l => l.att },
+  RB: { n: 2, cols: [['car', 'CAR'], ['ryd', 'RUSH YDS'], ['rec', 'REC'], ['cyd', 'REC YDS'], ['td', 'TD']], vol: l => l.car + l.tgt },
+  WR: { n: 3, cols: [['tgt', 'TGT'], ['rec', 'REC'], ['cyd', 'REC YDS'], ['td', 'TD'], ['ts', 'TGT %']], vol: l => l.tgt },
+  TE: { n: 1, cols: [['tgt', 'TGT'], ['rec', 'REC'], ['cyd', 'REC YDS'], ['td', 'TD'], ['ts', 'TGT %']], vol: l => l.tgt } };
+const msnVal = (l, k) => k === 'td' ? (l.rtd || 0) + (l.ctd || 0) : l[k] || 0;
+function msnData() {
+  const key = `${BOX.ver}|${Object.keys(boxCache()).length}|${Object.keys(AN.nflPos || {}).length}`; if (MSN.key === key && MSN.d) return MSN.d;
+  const t0 = AN_SP.NFL.start().getTime(), P = {}, T = {};
+  for (const [k, b] of Object.entries(boxCache())) {
+    if (!k.startsWith('NFL:') || !b.pl?.length || !b.date) continue;
+    const dt = new Date(b.date).getTime(); if (dt < t0) continue;
+    const L = b.pl.map(a => { const l = AN_SP.NFL.line(a); l.pos = anPosOf('NFL', l); return l; }), tids = [...new Set(L.map(l => l.team))]; if (tids.length !== 2) continue;
+    const pa = {}; for (const tid of tids) pa[tid] = L.filter(l => l.team === tid).reduce((x, l) => x + l.att, 0);
+    for (const l of L) {
+      const o = (P[l.id] ||= { id: l.id, name: l.name, team: l.team, pos: l.pos, g: 0, att: 0, cmp: 0, pyd: 0, ptd: 0, int: 0, car: 0, ryd: 0, rec: 0, cyd: 0, td: 0, tgt: 0, tpa: 0, last: 0 });
+      o.g++; for (const f of ['att', 'cmp', 'pyd', 'ptd', 'int', 'car', 'ryd', 'rec', 'cyd', 'tgt']) o[f] += l[f] || 0; o.td += msnVal(l, 'td'); o.tpa += pa[l.team] || 0;
+      if (dt >= o.last) { o.last = dt; o.team = l.team; if (l.pos) o.pos = l.pos; }
+    }
+    for (const tid of tids) { const opp = tids.find(x => x !== tid), A = L.filter(l => l.team === opp);
+      (T[tid] ||= []).push({ dt, against: A, plays: (A.reduce((x, l) => x + l.att + l.car, 0) + L.filter(l => l.team === tid).reduce((x, l) => x + l.att + l.car, 0)) / 2, pa: b.teams?.find(t => t.id === tid) ? (b.teams.find(t => t.id === opp)?.score ?? null) : null }); }
+  }
+  for (const gs of Object.values(T)) gs.sort((a, b) => b.dt - a.dt);
+  MSN.key = key; MSN.d = { P, T }; MSN.rk = {}; return MSN.d;
+}
+// rank every team (1 = allows the least) on its average over its last `n` games
+function msnRank(id, n, f) {
+  const k = `${id}|${n}|${MSN.key}`; if (MSN.rk[k]) return MSN.rk[k];
+  const vals = {};
+  for (const [tid, gs] of Object.entries(msnData().T)) { const w = gs.slice(0, n), xs = w.map(f).filter(v => v !== null && Number.isFinite(v)); if (xs.length >= 2) vals[tid] = anAvg(xs); }
+  const sorted = Object.values(vals).sort((a, b) => a - b), out = {};
+  for (const [tid, v] of Object.entries(vals)) out[tid] = { r: sorted.filter(x => x < v - 1e-9).length + 1, of: sorted.length, v };
+  return (MSN.rk[k] = out);
+}
+const msnPosRank = (stat, pos) => stat === 'ts' || stat === 'cmp' || stat === 'att' ? null : msnRank(`p|${stat}|${pos}`, 5, g => g.against.filter(l => l.pos === pos).reduce((a, l) => a + msnVal(l, stat), 0));
+function msnTeamBlock(ev, side) {
+  const tid = String(side === 'home' ? ev.homeTeamId : ev.awayTeamId), oppId = String(side === 'home' ? ev.awayTeamId : ev.homeTeamId);
+  const abbr = side === 'home' ? ev.homeAbbr : ev.awayAbbr, name = side === 'home' ? ev.homeName : ev.awayName, oppAbbr = side === 'home' ? ev.awayAbbr : ev.homeAbbr;
+  const { P } = msnData(), roster = teamRoster('NFL', tid), out = new Set(roster.filter(r => /out|ir|doubt/i.test(r.status || '')).map(r => r.playerId));
+  const mine = Object.values(P).filter(o => o.team === tid);
+  const L = linesFor(ev), ml = side === 'home' ? L.homeMl : L.awayMl, spread = L.spread === null ? null : side === 'home' ? L.spread : -L.spread;
+  const pace = msnRank('plays', 5, g => g.plays)[tid], paceR = pace ? pace.of + 1 - pace.r : null;   // 1 = most plays
+  const groups = Object.entries(MSN_ROLE).map(([pos, R]) => {
+    const ps = mine.filter(o => (roster.find(r => r.playerId === o.id)?.group || o.pos) === pos && !out.has(o.id)).sort((a, b) => R.vol(b) / b.g - R.vol(a) / a.g).slice(0, R.n);
+    if (!ps.length) return '';
+    const rows = ps.map(o => { const rec = roster.find(r => r.playerId === o.id);
+      return `<tr><td class="ms-name"><b>${esc(rec?.playerName || o.name)}</b> <span class="muted">${o.g}g</span></td>${R.cols.map(([k]) => {
+        const v = k === 'ts' ? (o.tpa ? o.tgt / o.tpa : null) : o[k] / o.g, rk = msnPosRank(k, pos)?.[oppId];
+        return `<td><div class="ms-cell"><span class="mono">${v === null ? '—' : k === 'ts' ? (v * 100).toFixed(1) + '%' : v.toFixed(1)}</span>${rk ? `<i class="ms-rk ${msHeat(rk.r, rk.of)}" title="${esc(oppAbbr)} is #${rk.r} of ${rk.of} in ${k.toUpperCase()} allowed to ${pos}s, last 5 games (${rk.of} = allows the most)">${rk.r}</i>` : ''}</div></td>`; }).join('')}</tr>`; }).join('');
+    return `<tr class="ms-div"><td>${pos}</td>${R.cols.map(c => `<td>${c[1]}</td>`).join('')}</tr>${rows}`;
+  }).join('');
+  const def = [['pyd', 'Pass yds'], ['ryd', 'Rush yds'], ['ptd', 'Pass TD'], ['rtd', 'Rush TD'], ['pts', 'Points']].map(([k, lab]) => {
+    const rk = k === 'pts' ? msnRank('pts', 5, g => g.pa)[oppId] : msnRank(`d|${k}`, 5, g => g.against.reduce((a, l) => a + (l[k] || 0), 0))[oppId];
+    return `<div class="${rk ? msHeat(rk.r, rk.of) : ''}"><i>${lab}</i><b>${rk ? rk.r : '—'}</b></div>`; }).join('');
+  return `<div class="ms-team">
+    <div class="ms-head"><div><b class="ms-abbr">${esc(abbr)}</b> <span class="xs muted">${esc(name || '')} · ${side}</span></div>
+      <div class="ms-chips"><span><i>ML</i>${ml ? fmtOdds(ml) : '—'}</span><span><i>Spread</i>${spread === null ? '—' : signed(spread)}</span><span><i>Total</i>${L.total ?? '—'}</span><span class="${paceR ? msHeat(pace.r, pace.of) : ''}"><i>Plays</i>${paceR ? '#' + paceR : '—'}</span></div></div>
+    <div class="table-wrap"><table class="ms-tbl ms-nfl"><tbody>${groups || '<tr><td class="muted">No box scores for this team yet.</td></tr>'}</tbody></table></div>
+    <div class="ms-zones"><div class="xs muted">${esc(oppAbbr)} defense · allowed per game, last 5 games (#1 = fewest)</div><div class="ms-zrow">${def}</div></div>
+  </div>`;
+}
+function msnSlate() {
+  const MK = [['pyd', 'Pass Yds', 'pass_yds', 'QB'], ['ryd', 'Rush Yds', 'rush_yds', null], ['cyd', 'Rec Yds', 'rec_yds', null], ['rec', 'Receptions', 'rec', null]];
+  if (!MK.some(m => m[0] === MS.nmk)) MS.nmk = 'cyd';
+  const m = MK.find(x => x[0] === MS.nmk), rows = [];
+  for (const sim of APP.simCache.values()) {
+    if (sim.ev?.sport !== 'NFL' || sim.ev.state !== 'pre' || !sim.players || !gameMatches(sim.ev)) continue;
+    for (const r of sim.players) {
+      if (r.market !== m[2] || !(r.mean > 0)) continue;
+      const rec = [...REG.players.values()].find(p => p.sport === 'NFL' && p.playerId === String(r.playerId));
+      const home = rec ? String(rec.teamId) === String(sim.ev.homeTeamId) : null, oppId = home === null ? null : String(home ? sim.ev.awayTeamId : sim.ev.homeTeamId);
+      const pos = rec?.group || null, rk = pos && oppId ? msnPosRank(m[0], pos)?.[oppId] : null;
+      const line = STORE.propBook[r.id]?.line ?? null, diff = line === null ? null : r.mean - line;
+      rows.push({ name: r.name, team: rec?.teamAbbr || '', game: `${sim.ev.awayAbbr}@${sim.ev.homeAbbr}`, pa: pos || '', rk, proj: r.mean, line, diff, dp: diff === null || !line ? null : diff / line });
+    }
+  }
+  return msTableHtml(rows, MK.map(x => [x[0], x[1]]), MS.nmk, 'data-msnmk', m[1], 'last 5 games');
 }
 function msRender() {
   const box = $('msBody'); if (!box || !document.querySelector('[data-drop="sheet"]')?.open) return;
   const ev = currentEvent();
   $('msTabs').querySelectorAll('[data-msview]').forEach(b => b.classList.toggle('on', b.dataset.msview === MS.view));
-  if (APP.sport !== 'NBA') { box.innerHTML = '<div class="xs muted">The matchup sheet is NBA only. Pick NBA at the top.</div>'; return; }
-  const ready = TS.ready?.NBA, have = Object.keys(msData().T).length >= 10;
-  const note = ready ? '' : `<div class="xs muted" style="margin-bottom:.4rem">${MS.loading ? `Loading this season's box scores${TS.prog?.NBA ? ` (${TS.prog.NBA.d}/${TS.prog.NBA.t})` : ''}… numbers fill in as they arrive.` : ''}</div>`;
+  const SP = APP.sport;
+  if (SP !== 'NBA' && SP !== 'NFL') { box.innerHTML = '<div class="xs muted">The matchup sheet covers the NBA and NFL. Pick one of them at the top.</div>'; return; }
+  const ready = TS.ready?.[SP], have = Object.keys((SP === 'NFL' ? msnData() : msData()).T).length >= 10;
+  const note = ready ? '' : `<div class="xs muted" style="margin-bottom:.4rem">${MS.loading ? `Loading this season's box scores${TS.prog?.[SP] ? ` (${TS.prog[SP].d}/${TS.prog[SP].t})` : ''}… numbers fill in as they arrive.` : ''}</div>`;
   if (!have && !ready) { box.innerHTML = note || '<div class="xs muted">Loading…</div>'; msLoad(); return; }
-  if (MS.view === 'slate') { box.innerHTML = note + msSlate(); return; }
+  if (MS.view === 'slate') { box.innerHTML = note + (SP === 'NFL' ? msnSlate() : msSlate()); if (!ready) msLoad(); return; }
   if (!ev) { box.innerHTML = '<div class="xs muted">Pick a game in the slate above.</div>'; return; }
-  box.innerHTML = note + `<div class="ms-grid">${msTeamBlock(ev, 'away')}${msTeamBlock(ev, 'home')}</div>
-    <div class="ms-legend xs muted"><span>Small colored numbers = opponent's rank vs his position, last 14 days:</span><i class="ms-rk h1">1</i> tough <i class="ms-rk h3">15</i> <i class="ms-rk h5">30</i> soft (allows the most) · USG% from box scores · zones from ESPN play-by-play</div>`;
+  box.innerHTML = note + (SP === 'NFL'
+    ? `<div class="ms-grid">${msnTeamBlock(ev, 'away')}${msnTeamBlock(ev, 'home')}</div>
+    <div class="ms-legend xs muted"><span>Small colored numbers = opponent's rank in that stat allowed to the position, last 5 games:</span><i class="ms-rk h1">1</i> tough <i class="ms-rk h3">16</i> <i class="ms-rk h5">32</i> soft (allows the most) · per-game season averages from ESPN box scores · TGT % = share of his team's pass attempts</div>`
+    : `<div class="ms-grid">${msTeamBlock(ev, 'away')}${msTeamBlock(ev, 'home')}</div>
+    <div class="ms-legend xs muted"><span>Small colored numbers = opponent's rank vs his position, last 14 days:</span><i class="ms-rk h1">1</i> tough <i class="ms-rk h3">15</i> <i class="ms-rk h5">30</i> soft (allows the most) · USG% from box scores · zones from ESPN play-by-play</div>`);
   if (!ready) msLoad();
 }
 async function msLoad() {
-  if (MS.loading || TS.ready?.NBA) return; MS.loading = true; TS.ready ||= {}; TS.prog ||= {};
-  try { await anEnsureLeague('NBA', (d, t) => { TS.prog.NBA = { d, t }; msRender(); }); TS.ready.NBA = true; delete TS.prog.NBA; } catch {}
+  const SP = APP.sport; if (MS.loading || TS.ready?.[SP] || !['NBA', 'NFL'].includes(SP)) return; MS.loading = true; TS.ready ||= {}; TS.prog ||= {};
+  try { await anEnsureLeague(SP, (d, t) => { TS.prog[SP] = { d, t }; msRender(); }); TS.ready[SP] = true; delete TS.prog[SP]; } catch {}
   MS.loading = false; msRender();
 }
 function msWire() {
   $('msTabs').addEventListener('click', e => { const b = e.target.closest('[data-msview]'); if (b) { MS.view = b.dataset.msview; msRender(); } });
   $('msBody').addEventListener('click', async e => {
     const m = e.target.closest('[data-msmk]'); if (m) { MS.mk = m.dataset.msmk; msRender(); return; }
+    const n = e.target.closest('[data-msnmk]'); if (n) { MS.nmk = n.dataset.msnmk; msRender(); return; }
     const s = e.target.closest('[data-mssort]'); if (s) { const k = s.dataset.mssort; if (MS.sort === k) MS.dir *= -1; else { MS.sort = k; MS.dir = k === 'name' || k === 'game' ? 1 : -1; } msRender(); return; }
-    if (e.target.closest('[data-mslines]')) { if (!hasOdds()) { e.target.textContent = 'Add your Odds API key first'; return; } e.target.disabled = true; e.target.textContent = 'Loading lines…'; try { await autoFillLines('NBA', false); refreshAllSims(); } catch {} msRender(); }
+    if (e.target.closest('[data-mslines]')) { if (!hasOdds()) { e.target.textContent = 'Add your Odds API key first'; return; } e.target.disabled = true; e.target.textContent = 'Loading lines…'; try { await autoFillLines(APP.sport, false); refreshAllSims(); } catch {} msRender(); }
   });
   document.querySelector('[data-drop="sheet"]').addEventListener('toggle', () => msRender());
 }
